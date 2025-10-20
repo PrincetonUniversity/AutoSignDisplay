@@ -22,3 +22,4 @@ Carthage/Build/
 *.swp
 *.lock
 *.log
+.DS_Store

@@ -11,7 +11,7 @@ This project contains an Xcode project (`Autostream.xcodeproj`) that builds the 
  3. Build and Run (⌘R) to install and launch the app in the tvOS simulator.
  
  Notes:
-- The app entrypoint (`Autostream`) applies managed configuration at `init()` by calling `AppConfig.applyConfiguration()`; to test managed settings locally, add the `com.apple.configuration.managed` dictionary to the simulator's `UserDefaults` or use `Streamosphere/ManagedAppConfig.example.plist` as a reference.
+ - The app entrypoint (`Autostream`) applies managed configuration at `init()` by calling `AppConfig.applyConfiguration()`; to test managed settings locally, add the `com.apple.configuration.managed` dictionary to the simulator's `UserDefaults` or use `Autostream/ManagedAppConfig.example.plist` as a reference.
  
  ## Build & test from the command line
  

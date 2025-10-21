@@ -1,6 +1,6 @@
 //
 //  ContentView.swift
-//  Streamosphere
+//  Autostream
 //
 //  Created by Michael Bino on 4/20/25.
 //
@@ -72,7 +72,7 @@ struct ContentView: View {
                 .padding()
                 .disabled(UserDefaults.standard.bool(forKey: ContentView.settingsDisabledKey))
             }
-            .navigationTitle("Streamosphere")
+            .navigationTitle("Autostream")
             .sheet(isPresented: $showingSettings) {
                 SettingsView(
                     isPlayingOnOpen: $viewModel.isPlayingOnOpen,

@@ -1,6 +1,6 @@
 //
 //  SettingsView.swift
-//  Streamosphere
+//  Autostream
 //
 //  Created by Michael Bino on 4/20/25.
 //

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+ "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <!-- Boolean: play the configured stream when the app opens -->
+    <key>PlayOnAppOpen</key>
+    <true/>
+
+    <!-- String: HLS stream URL to use -->
+    <key>StreamURL</key>
+    <string>https://example.com/path/to/stream.m3u8</string>
+
+    <!-- Boolean: attempt to resume playback automatically after network interruption -->
+    <key>AutoResume</key>
+    <true/>
+
+    <!-- Number (real): retry interval in seconds used by the app retry timer (optional) -->
+    <key>RetryTimeout</key>
+    <real>5.0</real>
+  </dict>
+</plist>

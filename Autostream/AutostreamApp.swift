@@ -1,8 +1,8 @@
-// Streamosphere.swift
+// Autostream.swift
 import SwiftUI
 
 @main
-struct Streamosphere: App {
+struct Autostream: App {
     init() {
         AppConfig.applyConfiguration()
     }

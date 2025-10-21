@@ -1,13 +1,13 @@
 //
 //  StreamosphereUITestsLaunchTests.swift
-//  StreamosphereUITests
+//  AutostreamUITests
 //
 //  Created by Michael Bino on 4/20/25.
 //
 
 import XCTest
 
-final class StreamosphereUITestsLaunchTests: XCTestCase {
+final class AutostreamUITestsLaunchTests: XCTestCase {
 
     override class var runsForEachTargetApplicationUIConfiguration: Bool {
         true

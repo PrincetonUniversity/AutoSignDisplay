@@ -1,8 +1,8 @@
 //
-//  StreamosphereUITests.swift
+//  AutostreamUITests.swift
 //  AutostreamUITests
 //
-//  Created by Michael Bino on 4/20/25.
+//  Created by migration agent.
 //
 
 import XCTest

@@ -58,7 +58,6 @@ Notes & troubleshooting:
  - `Autostream/SettingsView.swift` — settings UI bound to `StreamViewModel`.
  - `Autostream/OnChangeOld.swift` — helper providing old+new value for change handlers.
  
- If you'd like, I can add a short troubleshooting section for common simulator issues (signing, missing simulator runtimes) or a script for automated test runs.
 
 ## Helper script: scripts/run-tests.sh
 

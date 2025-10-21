@@ -13,9 +13,10 @@ struct AutostreamTests {
 
     @Test func autoplayCreatesPlayer() async throws {
         // Prepare UserDefaults for test
-        let defaults = UserDefaults.standard
-        defaults.set("https://example.com/stream.m3u8", forKey: ContentView.lastStreamURLKey)
-        defaults.set(true, forKey: ContentView.playOnOpenKey)
+        await MainActor.run {
+            UserDefaults.standard.set("https://example.com/stream.m3u8", forKey: ContentView.lastStreamURLKey)
+            UserDefaults.standard.set(true, forKey: ContentView.playOnOpenKey)
+        }
 
         let vm = StreamViewModel()
 

@@ -10,8 +10,9 @@ struct LoggerTests {
 
     @Test func autoResumeLogEmitted() async throws {
         // Prepare user defaults
-        let defaults = UserDefaults.standard
-        defaults.set("https://example.com/stream.m3u8", forKey: ContentView.lastStreamURLKey)
+        await MainActor.run {
+            UserDefaults.standard.set("https://example.com/stream.m3u8", forKey: ContentView.lastStreamURLKey)
+        }
 
         let testLogger = TestLogger()
         let vm = StreamViewModel(logger: testLogger)

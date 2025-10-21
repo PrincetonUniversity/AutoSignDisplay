@@ -62,7 +62,7 @@ else
   echo "[run-tests] simulator $UDID is already Booted"
 fi
 
-CMD=(xcodebuild -project Autostream.xcodeproj -scheme Autostream -sdk appletvsimulator -destination "id=$UDID" test)
+CMD=(xcodebuild -project Autostream.xcodeproj -scheme Autostream -sdk appletvsimulator -destination "id=$UDID" -parallel-testing-enabled NO test)
 
 echo "[run-tests] running: ${CMD[*]}"
 if [[ $DRY_RUN -eq 1 ]]; then

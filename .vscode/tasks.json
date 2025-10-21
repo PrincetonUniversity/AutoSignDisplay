@@ -6,10 +6,10 @@
       "type": "shell",
       "command": "xcodebuild",
       "args": [
-        "-project",
-        "Streamosphere.xcodeproj",
-        "-scheme",
-        "Streamosphere",
+  "-project",
+  "Autostream.xcodeproj",
+  "-scheme",
+  "Autostream",
         "-sdk",
         "appletvsimulator",
         "test"

@@ -8,15 +8,6 @@
 import Foundation
 import AVKit
 
-// Small injectable logger protocol so logging can be asserted in tests.
-protocol Logger {
-    func log(_ message: String)
-}
-
-struct PrintLogger: Logger {
-    func log(_ message: String) { print(message) }
-}
-
 class StreamViewModel: ObservableObject {
     @Published var streamURL: String
     @Published var isPlayingOnOpen: Bool

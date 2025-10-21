@@ -15,35 +15,36 @@ struct AppConfigKeys {
 }
 
 class AppConfig {
-    static func applyConfiguration() {
+    // Allow injecting a logger for tests. Defaults to PrintLogger.
+    static func applyConfiguration(logger: Logger = PrintLogger()) {
     guard let managedConfig = UserDefaults.standard.dictionary(forKey: "com.apple.configuration.managed") else {
-            print("No managed configuration found.")
+            logger.log("No managed configuration found.")
             return
         }
 
         if let playOnOpenValue = managedConfig[AppConfigKeys.playOnOpen] as? Bool {
             UserDefaults.standard.set(playOnOpenValue, forKey: ContentView.playOnOpenKey)
-            print("Applied managed PlayOnAppOpen: \(playOnOpenValue)")
+            logger.log("Applied managed PlayOnAppOpen: \(playOnOpenValue)")
         }
 
         if let retryTimeoutValue = managedConfig[AppConfigKeys.retryTimeout] as? Double {
             UserDefaults.standard.set(retryTimeoutValue, forKey: ContentView.retryTimeoutKey)
-            print("Applied managed RetryTimeout: \(retryTimeoutValue)")
+            logger.log("Applied managed RetryTimeout: \(retryTimeoutValue)")
         }
 
         if let autoResumeValue = managedConfig[AppConfigKeys.autoResume] as? Bool {
             UserDefaults.standard.set(autoResumeValue, forKey: ContentView.autoResumeKey)
-            print("Applied managed AutoResume: \(autoResumeValue)")
+            logger.log("Applied managed AutoResume: \(autoResumeValue)")
         }
 
             if let settingsDisabledValue = managedConfig[AppConfigKeys.settingsDisabled] as? Bool {
                 UserDefaults.standard.set(settingsDisabledValue, forKey: ContentView.settingsDisabledKey)
-                print("Applied managed SettingsDisabled: \(settingsDisabledValue)")
+                logger.log("Applied managed SettingsDisabled: \(settingsDisabledValue)")
             }
 
         if let streamURLValue = managedConfig[AppConfigKeys.streamURL] as? String {
             UserDefaults.standard.set(streamURLValue, forKey: ContentView.lastStreamURLKey)
-            print("Applied managed StreamURL: \(streamURLValue)")
+            logger.log("Applied managed StreamURL: \(streamURLValue)")
         }
     }
 }

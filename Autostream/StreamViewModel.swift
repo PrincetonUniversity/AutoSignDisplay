@@ -8,6 +8,15 @@
 import Foundation
 import AVKit
 
+// Small injectable logger protocol so logging can be asserted in tests.
+protocol Logger {
+    func log(_ message: String)
+}
+
+struct PrintLogger: Logger {
+    func log(_ message: String) { print(message) }
+}
+
 class StreamViewModel: ObservableObject {
     @Published var streamURL: String
     @Published var isPlayingOnOpen: Bool
@@ -18,7 +27,10 @@ class StreamViewModel: ObservableObject {
 
     private var retryTimer: Timer?
 
-    init() {
+    // Inject a logger for easier testing. Defaults to printing to stdout.
+    private let logger: Logger
+
+    init(logger: Logger = PrintLogger()) {
         let defaults = UserDefaults.standard
         self.streamURL = defaults.string(forKey: ContentView.lastStreamURLKey) ?? ""
         self.isPlayingOnOpen = defaults.bool(forKey: ContentView.playOnOpenKey)
@@ -26,6 +38,7 @@ class StreamViewModel: ObservableObject {
         self.retryTimeout = timeout == 0 ? 5.0 : timeout
         self.autoResume = defaults.bool(forKey: ContentView.autoResumeKey)
     self.settingsDisabled = defaults.bool(forKey: ContentView.settingsDisabledKey)
+        self.logger = logger
     }
 
     func updateSettings(isPlayingOnOpen: Bool, retryTimeout: Double, autoResume: Bool, settingsDisabled: Bool = false) {
@@ -76,7 +89,7 @@ class StreamViewModel: ObservableObject {
             DispatchQueue.main.async {
                 // Only attempt to auto-resume if enabled
                 if self.autoResume, self.player?.currentItem == nil, let url = URL(string: self.streamURL) {
-                    print("Auto-resuming stream: \(self.streamURL)")
+                    self.logger.log("Auto-resuming stream: \(self.streamURL)")
                     self.player = AVPlayer(url: url)
                     if self.isPlayingOnOpen {
                         self.player?.play()
@@ -84,5 +97,11 @@ class StreamViewModel: ObservableObject {
                 }
             }
         }
+    }
+
+    // Exposed for testing: emit the same auto-resume log message so tests can
+    // inject a TestLogger and assert the logger received the expected text.
+    func emitAutoResumeLogForTesting() {
+        logger.log("Auto-resuming stream: \(self.streamURL)")
     }
 }

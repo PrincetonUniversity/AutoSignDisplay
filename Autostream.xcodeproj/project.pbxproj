@@ -6,6 +6,15 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		E22222222222222222222222 /* Autostream/AutostreamApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D22222222222222222222222 /* Autostream/AutostreamApp.swift */; };
+		E33333333333333333333333 /* Autostream/ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33333333333333333333333 /* Autostream/ContentView.swift */; };
+		E44444444444444444444444 /* Autostream/StreamViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D44444444444444444444444 /* Autostream/StreamViewModel.swift */; };
+		E55555555555555555555555 /* Autostream/AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = D55555555555555555555555 /* Autostream/AppConfig.swift */; };
+		E66666666666666666666666 /* Autostream/SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D66666666666666666666666 /* Autostream/SettingsView.swift */; };
+		E77777777777777777777777 /* Autostream/OnChangeOld.swift in Sources */ = {isa = PBXBuildFile; fileRef = D77777777777777777777777 /* Autostream/OnChangeOld.swift */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		C06C3AA92DB526FC00506064 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -27,14 +36,12 @@
 		C06C3A9B2DB526FB00506064 /* Autostream.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Autostream.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C06C3AA82DB526FC00506064 /* AutostreamTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AutostreamTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C06C3AB22DB526FC00506064 /* AutostreamUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AutostreamUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-
-		D22222222222222222222222 /* AutostreamApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Autostream/AutostreamApp.swift; sourceTree = "<group>"; };
-		D33333333333333333333333 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Autostream/ContentView.swift; sourceTree = "<group>"; };
-		D44444444444444444444444 /* StreamViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Autostream/StreamViewModel.swift; sourceTree = "<group>"; };
-		D55555555555555555555555 /* AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Autostream/AppConfig.swift; sourceTree = "<group>"; };
-		D66666666666666666666666 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Autostream/SettingsView.swift; sourceTree = "<group>"; };
-		D77777777777777777777777 /* OnChangeOld.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Autostream/OnChangeOld.swift; sourceTree = "<group>"; };
-
+		D22222222222222222222222 /* Autostream/AutostreamApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Autostream/AutostreamApp.swift; sourceTree = "<group>"; };
+		D33333333333333333333333 /* Autostream/ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Autostream/ContentView.swift; sourceTree = "<group>"; };
+		D44444444444444444444444 /* Autostream/StreamViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Autostream/StreamViewModel.swift; sourceTree = "<group>"; };
+		D55555555555555555555555 /* Autostream/AppConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Autostream/AppConfig.swift; sourceTree = "<group>"; };
+		D66666666666666666666666 /* Autostream/SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Autostream/SettingsView.swift; sourceTree = "<group>"; };
+		D77777777777777777777777 /* Autostream/OnChangeOld.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Autostream/OnChangeOld.swift; sourceTree = "<group>"; };
 		D99999999999999999999999 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = Autostream/Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -86,20 +93,6 @@
 			);
 			sourceTree = "<group>";
 		};
-		D11111111111111111111111 /* Autostream */ = {
-			isa = PBXGroup;
-			children = (
-				D22222222222222222222222 /* AutostreamApp.swift */,
-				D33333333333333333333333 /* ContentView.swift */,
-				D44444444444444444444444 /* StreamViewModel.swift */,
-				D55555555555555555555555 /* AppConfig.swift */,
-				D66666666666666666666666 /* SettingsView.swift */,
-				D77777777777777777777777 /* OnChangeOld.swift */,
-				D99999999999999999999999 /* Assets.xcassets */,
-			);
-			name = Autostream;
-			sourceTree = "<group>";
-		};
 		C06C3A9C2DB526FB00506064 /* Products */ = {
 			isa = PBXGroup;
 			children = (
@@ -108,6 +101,20 @@
 				C06C3AB22DB526FC00506064 /* AutostreamUITests.xctest */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		D11111111111111111111111 /* Autostream */ = {
+			isa = PBXGroup;
+			children = (
+				D22222222222222222222222 /* Autostream/AutostreamApp.swift */,
+				D33333333333333333333333 /* Autostream/ContentView.swift */,
+				D44444444444444444444444 /* Autostream/StreamViewModel.swift */,
+				D55555555555555555555555 /* Autostream/AppConfig.swift */,
+				D66666666666666666666666 /* Autostream/SettingsView.swift */,
+				D77777777777777777777777 /* Autostream/OnChangeOld.swift */,
+				D99999999999999999999999 /* Assets.xcassets */,
+			);
+			name = Autostream;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -251,12 +258,12 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				E22222222222222222222222 /* AutostreamApp.swift in Sources */,
-				E33333333333333333333333 /* ContentView.swift in Sources */,
-				E44444444444444444444444 /* StreamViewModel.swift in Sources */,
-				E55555555555555555555555 /* AppConfig.swift in Sources */,
-				E66666666666666666666666 /* SettingsView.swift in Sources */,
-				E77777777777777777777777 /* OnChangeOld.swift in Sources */,
+				E22222222222222222222222 /* Autostream/AutostreamApp.swift in Sources */,
+				E33333333333333333333333 /* Autostream/ContentView.swift in Sources */,
+				E44444444444444444444444 /* Autostream/StreamViewModel.swift in Sources */,
+				E55555555555555555555555 /* Autostream/AppConfig.swift in Sources */,
+				E66666666666666666666666 /* Autostream/SettingsView.swift in Sources */,
+				E77777777777777777777777 /* Autostream/OnChangeOld.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -275,15 +282,6 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXSourcesBuildPhase section */
-
-/* Begin PBXBuildFile section */
-		E22222222222222222222222 /* AutostreamApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D22222222222222222222222 /* AutostreamApp.swift */; };
-		E33333333333333333333333 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33333333333333333333333 /* ContentView.swift */; };
-		E44444444444444444444444 /* StreamViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D44444444444444444444444 /* StreamViewModel.swift */; };
-		E55555555555555555555555 /* AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = D55555555555555555555555 /* AppConfig.swift */; };
-		E66666666666666666666666 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D66666666666666666666666 /* SettingsView.swift */; };
-		E77777777777777777777777 /* OnChangeOld.swift in Sources */ = {isa = PBXBuildFile; fileRef = D77777777777777777777777 /* OnChangeOld.swift */; };
-/* End PBXBuildFile section */
 
 /* Begin PBXTargetDependency section */
 		C06C3AAA2DB526FC00506064 /* PBXTargetDependency */ = {

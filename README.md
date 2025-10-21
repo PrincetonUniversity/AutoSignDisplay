@@ -59,6 +59,48 @@ Notes & troubleshooting:
  - `Autostream/OnChangeOld.swift` — helper providing old+new value for change handlers.
  
 
+## Features
+
+The app implements a small set of focused features for playing and managing HLS streams:
+
+- Enter an HLS stream URL and click "Play Stream" to start playback.
+- Channel presets: manage up to 20 saved stream URLs, pick one for playback, and optionally lock them down via managed configuration.
+- Play-on-open: enable or disable "Play on App Open" so the app will automatically play the last-used URL on launch.
+- Auto-resume: enable and display an "Auto Resume on Network Interrupt" option so the player will attempt to resume playback after transient network interruptions.
+- Retry/timing configuration: customize retry counts and timeout/backoff behavior for resume attempts.
+- Managed App Config: all user-facing options are also configurable via MDM/managed app configuration (see `Autostream/ManagedAppConfig.example.plist` and `AppConfig.applyConfiguration()`).
+
+These features are intentionally small and testable; they are exercised by the unit tests in `AutostreamTests` and the small UI tests in `AutostreamUITests`.
+
+## Tests and regression protection
+
+Core behaviors are covered by unit and small integration tests to prevent regressions:
+
+- Playback creation: tests assert a player is created when a valid stream URL exists and "Play on App Open" is enabled.
+- Channel presets seeding and managed overrides: tests confirm default presets are seeded, respect the 20-item limit, and that managed configuration enforces a read-only list with a default channel selection.
+- Auto-resume logging/behavior: tests inject a test `Logger` implementation to verify the auto-resume behavior emits expected logs (see `AutostreamTests/LoggerTests.swift`).
+- Settings persistence: tests set `UserDefaults` values (on the main actor) before creating the `StreamViewModel` and assert persistence and behavior are correct.
+
+How to run tests:
+
+1. Use the helper script (recommended) which will boot a simulator and run the tests against a specified UDID:
+
+```bash
+./scripts/run-tests.sh --udid <UDID>
+```
+
+2. Or run directly with xcodebuild and a pinned UDID to avoid cloned simulators:
+
+```bash
+xcodebuild -project Autostream.xcodeproj -scheme Autostream -sdk appletvsimulator -destination 'id=<UDID>' -parallel-testing-enabled NO test
+```
+
+Test guidance:
+
+- When tests need to change `UserDefaults` values that are main-actor-isolated (for example keys defined in `ContentView`), update `UserDefaults` from the main actor using `await MainActor.run { ... }` to avoid main-actor warnings and Sendable capture issues.
+- Pin a UDID and disable parallel testing for consistent, single-device test runs (this avoids xcodebuild creating cloned simulator devices).
+- If you add features that change persistence or playback lifecycle, add or update unit tests in `AutostreamTests` that set up `UserDefaults`, create a `StreamViewModel`, and assert the expected `player` state and retry behavior.
+
 ## Helper script: scripts/run-tests.sh
 
 For convenience there's a small helper script that will discover or accept a tvOS simulator UDID, boot it if necessary, wait for readiness, and run the tests:

@@ -23,12 +23,14 @@ struct SettingsView: View {
                             UserDefaults.standard.set(newValue, forKey: ContentView.playOnOpenKey)
                             onRetryTimeoutChanged()
                         }
+                        .disabled(settingsDisabled)
 
                 Toggle("Auto Resume on Network Interrupt", isOn: $autoResume)
                         .onChangeOld(of: autoResume) { oldValue, newValue in
                             UserDefaults.standard.set(newValue, forKey: ContentView.autoResumeKey)
                             onRetryTimeoutChanged()
                         }
+                        .disabled(settingsDisabled)
 
                 HStack {
                     Text("Retry Timeout (seconds):")
@@ -38,6 +40,7 @@ struct SettingsView: View {
                                         UserDefaults.standard.set(newValue, forKey: ContentView.retryTimeoutKey)
                                         onRetryTimeoutChanged()
                                     }
+                        .disabled(settingsDisabled)
                 }
             }
             .navigationTitle("Settings")

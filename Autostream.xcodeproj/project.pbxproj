@@ -14,6 +14,7 @@
 		E66666666666666666666666 /* Autostream/SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D66666666666666666666666 /* Autostream/SettingsView.swift */; };
 		E77777777777777777777777 /* Autostream/OnChangeOld.swift in Sources */ = {isa = PBXBuildFile; fileRef = D77777777777777777777777 /* Autostream/OnChangeOld.swift */; };
 		E88888888888888888888888 /* Autostream/Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = D88888888888888888888888 /* Autostream/Logger.swift */; };
+		E99999999999999999999990 /* Autostream/ChannelPresetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10101010101010101010101 /* Autostream/ChannelPresetsView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -44,6 +45,7 @@
 		D66666666666666666666666 /* Autostream/SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Autostream/SettingsView.swift; sourceTree = "<group>"; };
 		D77777777777777777777777 /* Autostream/OnChangeOld.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Autostream/OnChangeOld.swift; sourceTree = "<group>"; };
 		D88888888888888888888888 /* Autostream/Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Autostream/Logger.swift; sourceTree = "<group>"; };
+		D10101010101010101010101 /* Autostream/ChannelPresetsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Autostream/ChannelPresetsView.swift; sourceTree = "<group>"; };
 		D99999999999999999999999 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = Autostream/Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -115,6 +117,7 @@
 				D66666666666666666666666 /* Autostream/SettingsView.swift */,
 				D77777777777777777777777 /* Autostream/OnChangeOld.swift */,
 				D88888888888888888888888 /* Autostream/Logger.swift */,
+				D10101010101010101010101 /* Autostream/ChannelPresetsView.swift */,
 				D99999999999999999999999 /* Assets.xcassets */,
 			);
 			name = Autostream;
@@ -268,6 +271,7 @@
 				E66666666666666666666666 /* Autostream/SettingsView.swift in Sources */,
 				E77777777777777777777777 /* Autostream/OnChangeOld.swift in Sources */,
 				E88888888888888888888888 /* Autostream/Logger.swift in Sources */,
+				E99999999999999999999990 /* Autostream/ChannelPresetsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

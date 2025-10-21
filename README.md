@@ -21,7 +21,7 @@ This project contains an Xcode project (`Autostream.xcodeproj`) that builds the 
  xcodebuild -project Autostream.xcodeproj -scheme Autostream -sdk appletvsimulator test
  ```
  
-This will build and run the unit and UI tests in the tvOS simulator. Tests in `AutostreamTests` prepare `UserDefaults` directly before instantiating `StreamViewModel`.
+ This will build and run the unit and UI tests in the tvOS simulator. Tests in `AutostreamTests` prepare `UserDefaults` directly before instantiating `StreamViewModel`.
  
  ## Project structure (key files)
  

@@ -76,7 +76,7 @@ class StreamViewModel: ObservableObject {
             DispatchQueue.main.async {
                 // Only attempt to auto-resume if enabled
                 if self.autoResume, self.player?.currentItem == nil, let url = URL(string: self.streamURL) {
-                    print("Auto-resuming stream: \\(self.streamURL)")
+                    print("Auto-resuming stream: \(self.streamURL)")
                     self.player = AVPlayer(url: url)
                     if self.isPlayingOnOpen {
                         self.player?.play()

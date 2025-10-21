@@ -23,27 +23,27 @@ class AppConfig {
 
         if let playOnOpenValue = managedConfig[AppConfigKeys.playOnOpen] as? Bool {
             UserDefaults.standard.set(playOnOpenValue, forKey: ContentView.playOnOpenKey)
-            print("Applied managed PlayOnAppOpen: \\(playOnOpenValue)")
+            print("Applied managed PlayOnAppOpen: \(playOnOpenValue)")
         }
 
         if let retryTimeoutValue = managedConfig[AppConfigKeys.retryTimeout] as? Double {
             UserDefaults.standard.set(retryTimeoutValue, forKey: ContentView.retryTimeoutKey)
-            print("Applied managed RetryTimeout: \\(retryTimeoutValue)")
+            print("Applied managed RetryTimeout: \(retryTimeoutValue)")
         }
 
         if let autoResumeValue = managedConfig[AppConfigKeys.autoResume] as? Bool {
             UserDefaults.standard.set(autoResumeValue, forKey: ContentView.autoResumeKey)
-            print("Applied managed AutoResume: \\(autoResumeValue)")
+            print("Applied managed AutoResume: \(autoResumeValue)")
         }
 
             if let settingsDisabledValue = managedConfig[AppConfigKeys.settingsDisabled] as? Bool {
                 UserDefaults.standard.set(settingsDisabledValue, forKey: ContentView.settingsDisabledKey)
-                print("Applied managed SettingsDisabled: \\(settingsDisabledValue)")
+                print("Applied managed SettingsDisabled: \(settingsDisabledValue)")
             }
 
         if let streamURLValue = managedConfig[AppConfigKeys.streamURL] as? String {
             UserDefaults.standard.set(streamURLValue, forKey: ContentView.lastStreamURLKey)
-            print("Applied managed StreamURL: \\(streamURLValue)")
+            print("Applied managed StreamURL: \(streamURLValue)")
         }
     }
 }

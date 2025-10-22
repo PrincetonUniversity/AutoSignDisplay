@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+ "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <key>PlayOnAppOpen</key>
+    <true/>
+
+    <key>StreamURL</key>
+    <string>https://test.example.com/stream.m3u8</string>
+
+    <key>AutoResume</key>
+    <true/>
+
+    <key>RetryTimeout</key>
+    <real>5.0</real>
+
+    <key>ChannelPresets</key>
+    <array>
+      <string>https://test.example.com/channel1.m3u8</string>
+      <string>https://test.example.com/channel2.m3u8</string>
+      <string>https://test.example.com/channel3.m3u8</string>
+    </array>
+
+    <key>DefaultChannel</key>
+    <string>https://test.example.com/channel1.m3u8</string>
+  </dict>
+</plist>

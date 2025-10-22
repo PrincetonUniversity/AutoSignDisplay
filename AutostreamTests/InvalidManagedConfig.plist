@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+ "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+  <dict>
+    <!-- PlayOnAppOpen should be Boolean, not String -->
+    <key>PlayOnAppOpen</key>
+    <string>true</string>
+
+    <!-- RetryTimeout should be Double, not String -->
+    <key>RetryTimeout</key>
+    <string>5.0</string>
+
+    <!-- AutoResume should be Boolean, not Integer -->
+    <key>AutoResume</key>
+    <integer>1</integer>
+
+    <!-- ChannelPresets should be Array of Strings, contains an Integer -->
+    <key>ChannelPresets</key>
+    <array>
+      <string>https://test.example.com/channel1.m3u8</string>
+      <integer>123</integer>
+      <string>https://test.example.com/channel2.m3u8</string>
+    </array>
+
+    <!-- DefaultChannel should be String, providing Array instead -->
+    <key>DefaultChannel</key>
+    <array>
+      <string>https://test.example.com/channel1.m3u8</string>
+    </array>
+  </dict>
+</plist>

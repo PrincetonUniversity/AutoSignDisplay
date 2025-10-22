@@ -13,13 +13,14 @@ struct ChannelPresetsView: View {
 
     var body: some View {
         NavigationView {
-            Form {
-                Section {
-                    if viewModel.channelPresets.isEmpty {
-                        Text("No presets available.")
-                    } else {
-                        ForEach(Array(viewModel.channelPresets.enumerated()), id: \.offset) { index, _ in
-                            HStack {
+            VStack {
+                Form {
+                    Section {
+                        if viewModel.channelPresets.isEmpty {
+                            Text("No presets available.")
+                        } else {
+                            ForEach(Array(viewModel.channelPresets.enumerated()), id: \.offset) { index, _ in
+                            HStack(spacing: 12) {
                                 TextField(
                                     "Preset \(index + 1)",
                                     text: binding(for: index)
@@ -29,12 +30,6 @@ struct ChannelPresetsView: View {
                                 .textInputAutocapitalization(.never)
                                 .disabled(viewModel.channelPresetsManaged)
 
-                                Button("Use") {
-                                    viewModel.selectPreset(at: index)
-                                    dismiss()
-                                }
-                                .buttonStyle(.borderless)
-
                                 if !viewModel.channelPresetsManaged {
                                     Button(role: .destructive) {
                                         viewModel.removeChannelPreset(at: index)
@@ -43,27 +38,38 @@ struct ChannelPresetsView: View {
                                     }
                                     .buttonStyle(.borderless)
                                 }
+
+                                Button {
+                                    viewModel.selectPreset(at: index)
+                                    dismiss()
+                                } label: {
+                                    Image(systemName: "checkmark.circle")
+                                        .font(.system(size: 20))
+                                }
+                                .buttonStyle(.borderless)
                             }
+                        }
+                        }
+                    }
+
+                    if viewModel.channelPresetsManaged {
+                        Text("Stream presets are managed by your administrator.")
+                            .font(.footnote)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Button("Add Preset") {
+                            viewModel.addChannelPreset()
+                        }
+                        .disabled(!viewModel.canAddMorePresets)
+
+                        if !viewModel.canAddMorePresets {
+                            Text("You can store up to 20 channel presets.")
+                                .font(.footnote)
+                                .foregroundColor(.secondary)
                         }
                     }
                 }
-
-                if viewModel.channelPresetsManaged {
-                    Text("Stream presets are managed by your administrator.")
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                } else {
-                    Button("Add Preset") {
-                        viewModel.addChannelPreset()
-                    }
-                    .disabled(!viewModel.canAddMorePresets)
-
-                    if !viewModel.canAddMorePresets {
-                        Text("You can store up to 20 channel presets.")
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                    }
-                }
+                .formStyle(.grouped)
             }
             .navigationTitle("Stream Presets")
             .toolbar {

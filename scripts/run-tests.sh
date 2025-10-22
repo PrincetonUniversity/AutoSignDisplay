@@ -3,17 +3,20 @@ set -euo pipefail
 
 # Run Autostream unit + UI tests on a tvOS simulator, booting a simulator if needed.
 # Usage:
-#   ./scripts/run-tests.sh [--udid <UDID>] [--dry-run]
+#   ./scripts/run-tests.sh [--udid <UDID>] [--dry-run] [--managed | --unmanaged]
 
 DRY_RUN=0
 UDID=""
+MANAGED_MODE="unmanaged"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --dry-run) DRY_RUN=1; shift ;;
     --udid) UDID="$2"; shift 2 ;;
-    -h|--help) echo "Usage: $0 [--udid <UDID>] [--dry-run]"; exit 0 ;;
-    *) echo "Unknown arg: $1" >&2; echo "Usage: $0 [--udid <UDID>] [--dry-run]"; exit 2 ;;
+    --managed) MANAGED_MODE="managed"; shift ;;
+    --unmanaged) MANAGED_MODE="unmanaged"; shift ;;
+    -h|--help) echo "Usage: $0 [--udid <UDID>] [--dry-run] [--managed | --unmanaged]"; exit 0 ;;
+    *) echo "Unknown arg: $1" >&2; echo "Usage: $0 [--udid <UDID>] [--dry-run] [--managed | --unmanaged]"; exit 2 ;;
   esac
 done
 
@@ -62,7 +65,60 @@ else
   echo "[run-tests] simulator $UDID is already Booted"
 fi
 
-CMD=(xcodebuild -project Autostream.xcodeproj -scheme Autostream -sdk appletvsimulator -destination "id=$UDID" test)
+apply_managed_state() {
+  local mode="$1"
+  if [[ "$mode" == "managed" ]]; then
+    echo "[run-tests] applying managed configuration defaults"
+    if [[ $DRY_RUN -eq 1 ]]; then
+      echo "DRY: write managed configuration to simulator defaults"
+      return
+    fi
+
+    local plist
+    plist=$(mktemp)
+    cat <<'PLIST' > "$plist"
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>com.apple.configuration.managed</key>
+  <dict>
+    <key>PlayOnAppOpen</key>
+    <true/>
+    <key>StreamURL</key>
+    <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+    <key>AutoResume</key>
+    <true/>
+    <key>RetryTimeout</key>
+    <real>5.0</real>
+    <key>ChannelPresets</key>
+    <array>
+      <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+      <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+      <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+      <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+    </array>
+    <key>DefaultChannel</key>
+    <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+  </dict>
+</dict>
+</plist>
+PLIST
+    xcrun simctl spawn "$UDID" defaults import edu.princeton.orfe.Autostream "$plist"
+    rm -f "$plist"
+  else
+    echo "[run-tests] ensuring simulator defaults are unmanaged"
+    if [[ $DRY_RUN -eq 1 ]]; then
+      echo "DRY: xcrun simctl spawn $UDID defaults delete edu.princeton.orfe.Autostream com.apple.configuration.managed"
+      return
+    fi
+    xcrun simctl spawn "$UDID" defaults delete edu.princeton.orfe.Autostream com.apple.configuration.managed >/dev/null 2>&1 || true
+  fi
+}
+
+apply_managed_state "$MANAGED_MODE"
+
+CMD=(xcodebuild -project Autostream.xcodeproj -scheme Autostream -sdk appletvsimulator -destination "id=$UDID" -parallel-testing-enabled NO test)
 
 echo "[run-tests] running: ${CMD[*]}"
 if [[ $DRY_RUN -eq 1 ]]; then

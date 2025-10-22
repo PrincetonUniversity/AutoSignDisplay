@@ -37,14 +37,42 @@ Examples to reference when making changes
   - In `AppConfig.applyConfiguration()` read `managedConfig[AppConfigKeys.exampleFlag] as? Bool` and write to a `UserDefaults` key (add constant to `ContentView` if needed).
   - If UI needs to bind, add a `@Published` property to `StreamViewModel`, initialize from `UserDefaults` in `init()`, and expose a binding through `SettingsView`.
 
+⚠️ Critical gotcha: NSNumber type validation for Boolean fields
+When validating Boolean fields from managed configuration, be aware that NSNumber values can be implicitly cast to Bool in Swift, causing validation to incorrectly accept invalid integer values. This is particularly problematic when distinguishing between:
+- `<true/>` or `<false/>` from plist (CFBoolean, objCType 'c') → VALID
+- `<integer>1</integer>` or `<integer>0</integer>` from plist (int64_t, objCType 'q') → INVALID
+
+**The solution**: In `AppConfig.swift`, check for NSNumber BEFORE checking for Bool, and verify the objCType:
+```swift
+if let numValue = managedConfig[key] as? NSNumber {
+    let objCTypeStr = String(cString: numValue.objCType)
+    if objCTypeStr == "c" {  // CFBoolean marker
+        defaults.set(numValue.boolValue, forKey: userDefaultsKey)
+    } else {
+        logger.log("Rejected: integer NSNumber, not CFBoolean")
+    }
+} else if let boolValue = managedConfig[key] as? Bool {
+    defaults.set(boolValue, forKey: userDefaultsKey)
+}
+```
+
+This applies to all Boolean managed settings: `PlayOnAppOpen`, `AutoResume`, and `SettingsDisabled`.
+
 Testing hints
 - Tests prepare `UserDefaults` directly (see `AutostreamTests.swift`) before instantiating `StreamViewModel`. Follow the same pattern when writing new unit tests.
 - `StreamViewModel.startStreamIfNeeded()` creates an `AVPlayer` if a valid URL exists and `playOnOpen` is true — tests assert on the `player` being non-nil.
+- When testing managed config validation, use the test plist files in `AutostreamTests/`: `ValidManagedConfig.plist` (should apply), `InvalidManagedConfig.plist` (should reject invalid types), `EmptyManagedConfig.plist`, and `NegativeRetryTimeoutConfig.plist`.
 
 When editing code
 - Keep changes localized: modify small functions/classes and run the test in Xcode or via `xcodebuild` to verify behavior.
 - Update `ManagedAppConfig.example.plist` with new managed keys and example values when adding managed settings.
 - Preserve the `onChangeOld` usage pattern (old + new value) rather than switching to newer SDK-specific `onChange` overloads — the project intentionally avoids those to remain compatible with multiple Xcode versions.
+
+Debugging managed config issues
+- Test output is often truncated in xcodebuild. Save to a file: `xcodebuild ... test 2>&1 | tee /tmp/test_output.log` then read specific sections with grep or by copying to workspace.
+- When debugging type issues in managed config loading, store debug info in UserDefaults under a debug key and read it in tests: `defaults.set("debugInfo", forKey: "DEBUG_KEY")` then access in test with `defaults.string(forKey: "DEBUG_KEY")`.
+- The PropertyListSerialization options must be empty `[]` not `.mutabilityOptions` — the latter is invalid and causes compile failures.
+- Remember that NSNumber objCType can change after storing/retrieving from UserDefaults. Store the value in UserDefaults immediately after loading from plist to test the actual behavior.
 
 If something isn't discoverable
 - If you need to know CI or code signing details, ask the repo owner — those details are not present in the source tree.

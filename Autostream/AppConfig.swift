@@ -187,16 +187,11 @@ class AppConfig {
         if let streamURLValue = managedConfig[AppConfigKeys.streamURL] as? String {
             if streamURLValue.trimmingCharacters(in: .whitespaces).isEmpty {
                 logger.log("Rejected StreamURL: must not be empty")
-                // Do not return; continue processing other config keys
-                // Do not return; continue processing other config keys
             } else {
                 defaults.set(streamURLValue, forKey: ContentView.lastStreamURLKey)
                 logger.log("Applied managed StreamURL: \(streamURLValue)")
                 streamURLApplied = true
             }
-            defaults.set(streamURLValue, forKey: ContentView.lastStreamURLKey)
-            logger.log("Applied managed StreamURL: \(streamURLValue)")
-            streamURLApplied = true
         } else if managedConfig[AppConfigKeys.streamURL] != nil {
             logger.log("Ignored invalid StreamURL (must be non-empty String)")
         }
@@ -215,17 +210,16 @@ class AppConfig {
                 return urlString
             }
 
-            guard !validPresets.isEmpty else {
+            if validPresets.isEmpty {
                 logger.log("Rejected ChannelPresets: must contain at least one valid preset")
-                // Do not return; continue processing other config keys
+            } else {
+                let sanitized = Array(validPresets.prefix(StreamViewModel.maxChannelPresets))
+                defaults.set(sanitized, forKey: ContentView.channelPresetsKey)
+                defaults.set(true, forKey: ContentView.channelPresetsManagedKey)
+                logger.log("Applied managed ChannelPresets: \(sanitized.count) entries")
+                sanitizedPresets = sanitized
+                hasManagedPresets = true
             }
-
-            let sanitized = Array(validPresets.prefix(StreamViewModel.maxChannelPresets))
-            defaults.set(sanitized, forKey: ContentView.channelPresetsKey)
-            defaults.set(true, forKey: ContentView.channelPresetsManagedKey)
-            logger.log("Applied managed ChannelPresets: \(sanitized.count) entries")
-            sanitizedPresets = sanitized
-            hasManagedPresets = true
         } else if managedConfig[AppConfigKeys.channelPresets] != nil {
             logger.log("Ignored invalid ChannelPresets (must be Array of Strings)")
         }
@@ -233,20 +227,20 @@ class AppConfig {
         // Validate and apply DefaultChannel (must be String matching a preset)
         var selectedPresetIndex: Int?
         if let defaultChannelValue = managedConfig[AppConfigKeys.defaultChannel] as? String {
-            guard !defaultChannelValue.trimmingCharacters(in: .whitespaces).isEmpty else {
+            if defaultChannelValue.trimmingCharacters(in: .whitespaces).isEmpty {
                 logger.log("Rejected DefaultChannel: must not be empty")
-                // Do not return; continue processing other configuration keys
-            }
-            defaults.set(defaultChannelValue, forKey: ContentView.defaultChannelKey)
-            // Only set lastStreamURLKey if StreamURL wasn't already applied
-            if !streamURLApplied {
-                defaults.set(defaultChannelValue, forKey: ContentView.lastStreamURLKey)
-            }
-            logger.log("Applied managed DefaultChannel: \(defaultChannelValue)")
-            if hasManagedPresets {
-                selectedPresetIndex = sanitizedPresets.firstIndex(of: defaultChannelValue)
-                if selectedPresetIndex == nil {
-                    logger.log("Warning: DefaultChannel not found in ChannelPresets")
+            } else {
+                defaults.set(defaultChannelValue, forKey: ContentView.defaultChannelKey)
+                // Only set lastStreamURLKey if StreamURL wasn't already applied
+                if !streamURLApplied {
+                    defaults.set(defaultChannelValue, forKey: ContentView.lastStreamURLKey)
+                }
+                logger.log("Applied managed DefaultChannel: \(defaultChannelValue)")
+                if hasManagedPresets {
+                    selectedPresetIndex = sanitizedPresets.firstIndex(of: defaultChannelValue)
+                    if selectedPresetIndex == nil {
+                        logger.log("Warning: DefaultChannel not found in ChannelPresets")
+                    }
                 }
             }
         } else {

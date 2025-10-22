@@ -83,6 +83,11 @@ class StreamViewModel: ObservableObject {
         let storedIndex = defaults.object(forKey: ContentView.selectedPresetIndexKey) as? Int
         if let storedIndex, channelPresets.indices.contains(storedIndex) {
             self.selectedPresetIndex = storedIndex
+            let presetURL = channelPresets[storedIndex]
+            if !presetURL.isEmpty, self.streamURL != presetURL {
+                self.streamURL = presetURL
+                defaults.set(presetURL, forKey: ContentView.lastStreamURLKey)
+            }
         } else if let matchIndex = channelPresets.firstIndex(of: self.streamURL), !self.streamURL.isEmpty {
             self.selectedPresetIndex = matchIndex
             defaults.set(matchIndex, forKey: ContentView.selectedPresetIndexKey)

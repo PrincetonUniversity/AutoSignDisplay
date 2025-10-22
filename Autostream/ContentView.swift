@@ -49,6 +49,7 @@ struct ContentView: View {
     @State private var activeSheet: SheetDestination?
     @State private var showPlayer = false
     @State private var presentationFailed = false
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
         NavigationView {
@@ -177,37 +178,21 @@ struct ContentView: View {
             }
             .onAppear {
                 viewModel.startStreamIfNeeded()
-
-                // Delay presentation until the view hierarchy is ready. On tvOS
-                // presenting a full-screen cover immediately in onAppear can
-                // sometimes fail when the app launches from the Home screen.
-                DispatchQueue.main.async {
-                    if viewModel.isPlayingOnOpen, let _ = URL(string: viewModel.streamURL) {
-                        // Ensure player is created and playing, then present full screen
-                        if viewModel.player == nil {
-                            viewModel.playStream()
-                        }
-                        if viewModel.player != nil {
-                            showPlayer = true
-                            presentationFailed = false
-                        } else {
-                            // mark failure and retry once after a short delay
-                            presentationFailed = true
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                                if viewModel.player == nil {
-                                    viewModel.playStream()
-                                }
-                                if viewModel.player != nil {
-                                    showPlayer = true
-                                    presentationFailed = false
-                                }
-                            }
-                        }
-                    }
-                }
+                scheduleAutoPlayPresentation()
             }
             .onDisappear {
                 viewModel.stopRetryTimer()
+            }
+            .onChangeOld(of: scenePhase) { _, newPhase in
+                switch newPhase {
+                case .active:
+                    viewModel.startStreamIfNeeded()
+                    scheduleAutoPlayPresentation()
+                case .background:
+                    viewModel.stopRetryTimer()
+                default:
+                    break
+                }
             }
             .fullScreenCover(isPresented: $showPlayer) {
                 if let player = viewModel.player {
@@ -217,6 +202,45 @@ struct ContentView: View {
                             player.play()
                         }
                 }
+            }
+        }
+    }
+}
+
+private extension ContentView {
+    @MainActor
+    func scheduleAutoPlayPresentation() {
+        DispatchQueue.main.async {
+            guard viewModel.isPlayingOnOpen, let _ = URL(string: viewModel.streamURL) else {
+                return
+            }
+
+            if viewModel.player == nil || viewModel.player?.currentItem == nil {
+                viewModel.playStream()
+            } else {
+                viewModel.player?.play()
+            }
+
+            guard let player = viewModel.player else {
+                presentationFailed = true
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+                    if viewModel.player == nil || viewModel.player?.currentItem == nil {
+                        viewModel.playStream()
+                    }
+                    if viewModel.player != nil {
+                        showPlayer = true
+                        presentationFailed = false
+                    }
+                }
+                return
+            }
+
+            if showPlayer {
+                player.play()
+                presentationFailed = false
+            } else {
+                showPlayer = true
+                presentationFailed = false
             }
         }
     }

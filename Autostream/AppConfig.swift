@@ -235,7 +235,7 @@ class AppConfig {
         if let defaultChannelValue = managedConfig[AppConfigKeys.defaultChannel] as? String {
             guard !defaultChannelValue.trimmingCharacters(in: .whitespaces).isEmpty else {
                 logger.log("Rejected DefaultChannel: must not be empty")
-                return
+                // Do not return; continue processing other configuration keys
             }
             defaults.set(defaultChannelValue, forKey: ContentView.defaultChannelKey)
             // Only set lastStreamURLKey if StreamURL wasn't already applied

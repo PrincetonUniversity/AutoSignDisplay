@@ -217,7 +217,7 @@ class AppConfig {
 
             guard !validPresets.isEmpty else {
                 logger.log("Rejected ChannelPresets: must contain at least one valid preset")
-                return
+                // Do not return; continue processing other config keys
             }
 
             let sanitized = Array(validPresets.prefix(StreamViewModel.maxChannelPresets))

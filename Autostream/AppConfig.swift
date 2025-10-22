@@ -130,12 +130,12 @@ class AppConfig {
 
         // Validate and apply RetryTimeout (must be Double/NSNumber)
         if let retryTimeoutValue = managedConfig[AppConfigKeys.retryTimeout] as? Double {
-            guard retryTimeoutValue > 0 else {
+            if retryTimeoutValue > 0 {
+                defaults.set(retryTimeoutValue, forKey: ContentView.retryTimeoutKey)
+                logger.log("Applied managed RetryTimeout: \(retryTimeoutValue)")
+            } else {
                 logger.log("Rejected RetryTimeout: must be positive (got \(retryTimeoutValue))")
-                return
             }
-            defaults.set(retryTimeoutValue, forKey: ContentView.retryTimeoutKey)
-            logger.log("Applied managed RetryTimeout: \(retryTimeoutValue)")
         } else if managedConfig[AppConfigKeys.retryTimeout] != nil {
             logger.log("Ignored invalid RetryTimeout (must be positive Double)")
         }

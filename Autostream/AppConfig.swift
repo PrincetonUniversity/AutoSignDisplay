@@ -185,9 +185,14 @@ class AppConfig {
         // Validate and apply StreamURL (must be non-empty String)
         var streamURLApplied = false
         if let streamURLValue = managedConfig[AppConfigKeys.streamURL] as? String {
-            guard !streamURLValue.trimmingCharacters(in: .whitespaces).isEmpty else {
+            if streamURLValue.trimmingCharacters(in: .whitespaces).isEmpty {
                 logger.log("Rejected StreamURL: must not be empty")
-                return
+                // Do not return; continue processing other config keys
+                // Do not return; continue processing other config keys
+            } else {
+                defaults.set(streamURLValue, forKey: ContentView.lastStreamURLKey)
+                logger.log("Applied managed StreamURL: \(streamURLValue)")
+                streamURLApplied = true
             }
             defaults.set(streamURLValue, forKey: ContentView.lastStreamURLKey)
             logger.log("Applied managed StreamURL: \(streamURLValue)")

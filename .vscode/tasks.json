@@ -4,15 +4,9 @@
     {
       "label": "xcodebuild: test",
       "type": "shell",
-      "command": "xcodebuild",
+      "command": "./scripts/run-tests.sh",
       "args": [
-  "-project",
-  "Autostream.xcodeproj",
-  "-scheme",
-  "Autostream",
-        "-sdk",
-        "appletvsimulator",
-        "test"
+        "--unmanaged"
       ],
       "group": "test",
       "presentation": {
@@ -20,8 +14,9 @@
         "panel": "shared"
       },
       "problemMatcher": [
-        "$clang"
+        "$gcc"
       ]
     }
   ]
 }
+

@@ -51,9 +51,22 @@ PY
 fi
 
 # If the device is not Booted, boot it and wait for readiness
-STATE=$(xcrun simctl getenv "$UDID" state 2>/dev/null || true)
+STATE=$(python3 - "$UDID" <<'PY'
+import json,subprocess,sys
+udid = sys.argv[1]
+out = subprocess.check_output(["xcrun","simctl","list","devices","--json"]).decode()
+data = json.loads(out)
+devices = data.get('devices', {})
+for runtime in devices.values():
+    for d in runtime:
+        if d.get('udid') == udid:
+            print(d.get('state', 'Unknown'))
+            sys.exit(0)
+print('Unknown')
+PY
+)
 if [[ "$STATE" != "Booted" ]]; then
-  echo "[run-tests] simulator $UDID is not Booted (state="$STATE"). Booting..."
+  echo "[run-tests] simulator $UDID is not Booted (state=$STATE). Booting..."
   if [[ $DRY_RUN -eq 1 ]]; then
     echo "DRY: xcrun simctl boot $UDID"
     echo "DRY: xcrun simctl bootstatus $UDID -b"

@@ -22,3 +22,8 @@ Carthage/Build/
 *.swp
 *.lock
 *.log
+.DS_Store
+
+# Test output files
+test_*.txt
+

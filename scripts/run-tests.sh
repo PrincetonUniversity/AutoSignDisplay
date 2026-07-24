@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Run Autostream unit + UI tests on a tvOS simulator, booting a simulator if needed.
+# Run AutoSignDisplay unit + UI tests on a tvOS simulator, booting a simulator if needed.
 # Usage:
 #   ./scripts/run-tests.sh [--udid <UDID>] [--dry-run] [--managed | --unmanaged]
 
@@ -117,21 +117,21 @@ apply_managed_state() {
 </dict>
 </plist>
 PLIST
-    xcrun simctl spawn "$UDID" defaults import edu.princeton.orfe.Autostream "$plist"
+    xcrun simctl spawn "$UDID" defaults import edu.princeton.autosigndisplay "$plist"
     rm -f "$plist"
   else
     echo "[run-tests] ensuring simulator defaults are unmanaged"
     if [[ $DRY_RUN -eq 1 ]]; then
-      echo "DRY: xcrun simctl spawn $UDID defaults delete edu.princeton.orfe.Autostream com.apple.configuration.managed"
+      echo "DRY: xcrun simctl spawn $UDID defaults delete edu.princeton.autosigndisplay com.apple.configuration.managed"
       return
     fi
-    xcrun simctl spawn "$UDID" defaults delete edu.princeton.orfe.Autostream com.apple.configuration.managed >/dev/null 2>&1 || true
+    xcrun simctl spawn "$UDID" defaults delete edu.princeton.autosigndisplay com.apple.configuration.managed >/dev/null 2>&1 || true
   fi
 }
 
 apply_managed_state "$MANAGED_MODE"
 
-CMD=(xcodebuild -project Autostream.xcodeproj -scheme Autostream -sdk appletvsimulator -destination "id=$UDID" -parallel-testing-enabled NO test)
+CMD=(xcodebuild -project AutoSignDisplay.xcodeproj -scheme AutoSignDisplay -sdk appletvsimulator -destination "id=$UDID" -parallel-testing-enabled NO test)
 
 echo "[run-tests] running: ${CMD[*]}"
 if [[ $DRY_RUN -eq 1 ]]; then

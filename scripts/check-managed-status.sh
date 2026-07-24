@@ -2,7 +2,7 @@
 set -e
 
 DEVICE_ID="22EE280A-72F6-46C5-BA67-357D68316385"
-BUNDLE_ID="edu.princeton.orfe.Autostream"
+BUNDLE_ID="edu.princeton.autosigndisplay"
 
 # Wait a moment for the app to initialize
 sleep 2

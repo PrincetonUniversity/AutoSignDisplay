@@ -1,7 +1,7 @@
 #!/bin/bash
 
 DEVICE_ID="22EE280A-72F6-46C5-BA67-357D68316385"
-BUNDLE_ID="edu.princeton.orfe.Autostream"
+BUNDLE_ID="edu.princeton.autosigndisplay"
 
 echo "=========================================="
 echo "App Managed Configuration Status Check"

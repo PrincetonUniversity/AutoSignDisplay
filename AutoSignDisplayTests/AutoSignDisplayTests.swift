@@ -1,23 +1,23 @@
 //
-//  AutostreamTests.swift
-//  AutostreamTests
+//  AutoSignDisplayTests.swift
+//  AutoSignDisplayTests
 //
 //  Created by migration agent.
 //
 
 import Foundation
 import Testing
-@testable import Autostream
+@testable import AutoSignDisplay
 
 @MainActor
-struct AutostreamTests {
+struct AutoSignDisplayTests {
 
     private func resetDefaults() async {
         await MainActor.run {
             let defaults = UserDefaults.standard
             let identifiers = [
                 Bundle.main.bundleIdentifier,
-                "edu.princeton.orfe.Autostream"
+                "edu.princeton.autosigndisplay"
             ].compactMap { $0 }
 
             // Remove all persistent domains

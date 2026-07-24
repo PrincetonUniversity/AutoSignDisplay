@@ -23,7 +23,7 @@ The previous simulator instance had managed config data persisted from test runs
 
 1. **Shut down simulator**: `xcrun simctl shutdown all`
 2. **Erased all simulator state**: `xcrun simctl erase all`
-3. **Built fresh app**: `xcodebuild -project Autostream.xcodeproj -scheme Autostream -sdk appletvsimulator build`
+3. **Built fresh app**: `xcodebuild -project AutoSignDisplay.xcodeproj -scheme AutoSignDisplay -sdk appletvsimulator build`
 4. **Installed to clean simulator**: Clean install onto reset simulator
 
 ## Building Without Managed Config
@@ -32,7 +32,7 @@ To build and install a version that is NOT managed (the default):
 
 ```bash
 # Build the app
-xcodebuild -project Autostream.xcodeproj -scheme Autostream -sdk appletvsimulator build
+xcodebuild -project AutoSignDisplay.xcodeproj -scheme AutoSignDisplay -sdk appletvsimulator build
 
 # Erase simulator state (if needed)
 xcrun simctl shutdown all
@@ -42,10 +42,10 @@ xcrun simctl erase all
 xcrun simctl boot <device-id>
 
 # Install app
-xcrun simctl install <device-id> <path-to-build>/Autostream.app
+xcrun simctl install <device-id> <path-to-build>/AutoSignDisplay.app
 
 # Launch app
-xcrun simctl launch <device-id> edu.princeton.orfe.Autostream
+xcrun simctl launch <device-id> edu.princeton.autosigndisplay
 ```
 
 ## Testing Managed vs Unmanaged
@@ -59,7 +59,7 @@ xcrun simctl launch <device-id> edu.princeton.orfe.Autostream
 To test managed mode, inject a config plist:
 ```bash
 xcrun simctl spawn <device-id> defaults write \
-  edu.princeton.orfe.Autostream \
+  edu.princeton.autosigndisplay \
   com.apple.configuration.managed \
   -dict-add ChannelPresets \
   -array-add-string "https://example.com/channel.m3u8"
@@ -80,5 +80,5 @@ Then relaunch the app to apply managed configuration.
 ## Current Running Instance
 
 Device ID: `22EE280A-72F6-46C5-BA67-357D68316385`  
-App Bundle ID: `edu.princeton.orfe.Autostream`  
+App Bundle ID: `edu.princeton.autosigndisplay`  
 Status: ✅ **Unmanaged** (correct)

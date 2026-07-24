@@ -1,8 +1,8 @@
-// Autostream.swift
+// AutoSignDisplay.swift
 import SwiftUI
 
 @main
-struct Autostream: App {
+struct AutoSignDisplay: App {
     init() {
         AppConfig.applyConfiguration()
     }

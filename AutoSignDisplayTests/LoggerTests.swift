@@ -1,6 +1,6 @@
 import Foundation
 import Testing
-@testable import Autostream
+@testable import AutoSignDisplay
 
 struct LoggerTests {
     class TestLogger: Logger {

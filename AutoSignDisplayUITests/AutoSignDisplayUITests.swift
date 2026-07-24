@@ -1,13 +1,13 @@
 //
-//  AutostreamUITests.swift
-//  AutostreamUITests
+//  AutoSignDisplayUITests.swift
+//  AutoSignDisplayUITests
 //
 //  Created by migration agent.
 //
 
 import XCTest
 
-final class AutostreamUITests: XCTestCase {
+final class AutoSignDisplayUITests: XCTestCase {
 
     override func setUpWithError() throws {
         // Put setup code here. This method is called before the invocation of each test method in the class.

@@ -1,6 +1,6 @@
 //
 //  AppConfig.swift
-//  Autostream
+//  AutoSignDisplay
 //
 //  Created by Michael Bino on 4/20/25.
 
@@ -30,7 +30,14 @@ class AppConfig {
                 defaults.removeObject(forKey: ContentView.defaultChannelKey)
                 defaults.removeObject(forKey: ContentView.lastStreamURLKey)
                 defaults.removeObject(forKey: ContentView.selectedPresetIndexKey)
-                logger.log("Cleared managed presets after configuration removal.")
+                // Any preference the managed config could have written must also be cleared —
+                // otherwise SettingsDisabled=true (etc.) stays sticky after MDM goes away and
+                // leaves the user unable to reach Settings in unmanaged mode.
+                defaults.removeObject(forKey: ContentView.playOnOpenKey)
+                defaults.removeObject(forKey: ContentView.autoResumeKey)
+                defaults.removeObject(forKey: ContentView.settingsDisabledKey)
+                defaults.removeObject(forKey: ContentView.retryTimeoutKey)
+                logger.log("Cleared managed settings after configuration removal.")
             } else {
                 logger.log("No managed configuration found.")
             }
@@ -50,9 +57,9 @@ class AppConfig {
         // Try current bundle first
         filePath = Bundle(for: AppConfig.self).path(forResource: filename, ofType: "plist")
         
-        // If not found, look for AutostreamTests bundle
+        // If not found, look for AutoSignDisplayTests bundle
         if filePath == nil {
-            if let testsBundle = Bundle(identifier: "edu.princeton.orfe.AutostreamTests") {
+            if let testsBundle = Bundle(identifier: "edu.princeton.autosigndisplay.tests") {
                 filePath = testsBundle.path(forResource: filename, ofType: "plist")
             }
         }

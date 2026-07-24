@@ -1,6 +1,6 @@
 //
 //  ContentView.swift
-//  Autostream
+//  AutoSignDisplay
 //
 //  Created by Michael Bino on 4/20/25.
 //
@@ -154,7 +154,7 @@ struct ContentView: View {
                 .padding(.horizontal, 48)
                 .padding(.vertical, 36)
             }
-            .navigationTitle("Autostream")
+            .navigationTitle("AutoSignDisplay")
             .sheet(item: $activeSheet) { destination in
                 switch destination {
                 case .settings:

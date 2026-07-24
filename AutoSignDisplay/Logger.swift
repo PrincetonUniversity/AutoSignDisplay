@@ -1,6 +1,6 @@
 //
 //  Logger.swift
-//  Autostream
+//  AutoSignDisplay
 //
 //  Small, shared logger protocol and default implementation used across the app
 //  so logging can be injected in tests.

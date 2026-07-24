@@ -1,6 +1,6 @@
 //
 //  ChannelPresetsView.swift
-//  Autostream
+//  AutoSignDisplay
 //
 //  Created for managing channel presets.
 //

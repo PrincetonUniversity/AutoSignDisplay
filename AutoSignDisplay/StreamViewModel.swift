@@ -1,6 +1,6 @@
 //
 //  StreamViewModel.swift
-//  Autostream
+//  AutoSignDisplay
 //
 //  Created by Michael Bino on 4/20/25.
 //

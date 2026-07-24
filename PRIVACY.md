@@ -1,9 +1,9 @@
 # AutoSignDisplay Privacy Policy
 
-**Effective date:** 2026-07-24
-**Developer:** Princeton University — Department of Operations Research and Financial Engineering (ORFE)
-**Contact:** [orfeio@princeton.edu](mailto:orfeio@princeton.edu)
-**App:** AutoSignDisplay (Apple TV) — bundle identifier `edu.princeton.autosigndisplay`
+**Effective date:** 2026-07-24  
+**Developer:** Princeton University — Department of Operations Research and Financial Engineering (ORFE)  
+**Contact:** [orfeio@princeton.edu](mailto:orfeio@princeton.edu)  
+**App:** AutoSignDisplay (Apple TV) — bundle identifier `edu.princeton.autosigndisplay`  
 
 ## Summary
 

@@ -21,7 +21,8 @@ struct ChannelPresetsView: View {
                         ForEach(Array(viewModel.channelPresets.enumerated()), id: \.offset) { index, _ in
                             PresetRow(
                                 index: index,
-                                text: binding(for: index),
+                                name: nameBinding(for: index),
+                                url: urlBinding(for: index),
                                 managed: viewModel.channelPresetsManaged,
                                 onRemove: { viewModel.removeChannelPreset(at: index) },
                                 onSelect: {
@@ -68,16 +69,28 @@ struct ChannelPresetsView: View {
         }
     }
 
-    private func binding(for index: Int) -> Binding<String> {
+    private func nameBinding(for index: Int) -> Binding<String> {
         Binding(
             get: {
-                if viewModel.channelPresets.indices.contains(index) {
-                    return viewModel.channelPresets[index]
-                }
-                return ""
+                viewModel.channelPresets.indices.contains(index)
+                    ? viewModel.channelPresets[index].name
+                    : ""
             },
             set: { newValue in
-                viewModel.updateChannelPreset(at: index, with: newValue)
+                viewModel.updateChannelPresetName(at: index, name: newValue)
+            }
+        )
+    }
+
+    private func urlBinding(for index: Int) -> Binding<String> {
+        Binding(
+            get: {
+                viewModel.channelPresets.indices.contains(index)
+                    ? viewModel.channelPresets[index].url
+                    : ""
+            },
+            set: { newValue in
+                viewModel.updateChannelPreset(at: index, url: newValue)
             }
         )
     }
@@ -85,24 +98,33 @@ struct ChannelPresetsView: View {
 
 private struct PresetRow: View {
     let index: Int
-    @Binding var text: String
+    @Binding var name: String
+    @Binding var url: String
     let managed: Bool
     let onRemove: () -> Void
     let onSelect: () -> Void
-    @FocusState private var textFieldFocused: Bool
+
+    @FocusState private var nameFocused: Bool
+    @FocusState private var urlFocused: Bool
 
     var body: some View {
-        HStack(spacing: 12) {
-            TextField("Preset \(index + 1)", text: $text)
-                .textContentType(.URL)
-                .autocorrectionDisabled()
-                .textInputAutocapitalization(.never)
-                .focused($textFieldFocused)
-                // Same white-on-white problem as the Settings toggles: when the row
-                // lights up on focus, default `.primary` text is invisible.
-                .foregroundColor(textFieldFocused ? .black : .primary)
-                .accessibilityLabel("Preset \(index + 1) URL")
-                .disabled(managed)
+        HStack(alignment: .center, spacing: 12) {
+            VStack(alignment: .leading, spacing: 6) {
+                TextField("Name (optional)", text: $name)
+                    .focused($nameFocused)
+                    .foregroundColor(nameFocused ? .black : .primary)
+                    .accessibilityLabel("Preset \(index + 1) name")
+                    .disabled(managed)
+
+                TextField("Preset \(index + 1) URL", text: $url)
+                    .textContentType(.URL)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .focused($urlFocused)
+                    .foregroundColor(urlFocused ? .black : .primary)
+                    .accessibilityLabel("Preset \(index + 1) URL")
+                    .disabled(managed)
+            }
 
             if !managed {
                 Button(role: .destructive) {

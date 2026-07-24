@@ -55,6 +55,12 @@ struct AutoSignDisplayTests {
         func log(_ message: String) {}
     }
 
+    /// Reads channelPresets in either the new dict form or the legacy string form.
+    /// Returns just the URLs — most tests only care about URL identity.
+    private func persistedPresetURLs(_ defaults: UserDefaults) -> [String] {
+        (StreamViewModel.loadPresets(from: defaults) ?? []).map { $0.url }
+    }
+
     @Test func startStreamOnOpenUsesSelectedPreset() async throws {
         await resetDefaults()
 
@@ -201,7 +207,7 @@ struct AutoSignDisplayTests {
         #expect(defaults.double(forKey: ContentView.retryTimeoutKey) == 5.0)
         #expect(defaults.string(forKey: ContentView.lastStreamURLKey) == "https://test.example.com/stream.m3u8")
 
-        let presets = defaults.stringArray(forKey: ContentView.channelPresetsKey) ?? []
+        let presets = persistedPresetURLs(defaults)
         #expect(presets.count == 3)
         #expect(presets.first == "https://test.example.com/channel1.m3u8")
 
@@ -232,10 +238,10 @@ struct AutoSignDisplayTests {
         #expect(defaults.object(forKey: ContentView.defaultChannelKey) == nil)
 
         // ChannelPresets with mixed types should extract only valid Strings
-        let presets = defaults.stringArray(forKey: ContentView.channelPresetsKey) ?? []
+        let presets = persistedPresetURLs(defaults)
         #expect(presets.count == 2)
-        #expect(presets.contains(where: { $0 == "https://test.example.com/channel1.m3u8" }))
-        #expect(presets.contains(where: { $0 == "https://test.example.com/channel2.m3u8" }))
+        #expect(presets.contains("https://test.example.com/channel1.m3u8"))
+        #expect(presets.contains("https://test.example.com/channel2.m3u8"))
 
         // Should still be marked as managed since we got valid presets
         #expect(defaults.bool(forKey: ContentView.channelPresetsManagedKey) == true)
@@ -313,7 +319,7 @@ struct AutoSignDisplayTests {
         #expect(defaults.object(forKey: ContentView.retryTimeoutKey) == nil)
 
         // Valid presets should be extracted
-        let presets = defaults.stringArray(forKey: ContentView.channelPresetsKey) ?? []
+        let presets = persistedPresetURLs(defaults)
         #expect(presets.count == 2)
         #expect(defaults.bool(forKey: ContentView.channelPresetsManagedKey) == true)
     }
@@ -341,8 +347,7 @@ struct AutoSignDisplayTests {
             vm.addChannelPreset()
         }
         #expect(vm.channelPresets.count == 2)
-        let persistedCount = defaults.stringArray(forKey: ContentView.channelPresetsKey)?.count ?? 0
-        #expect(persistedCount == 2)
+        #expect(persistedPresetURLs(defaults).count == 2)
 
         // Simulate returning to main screen and back
         vm.stopRetryTimer()
@@ -351,9 +356,9 @@ struct AutoSignDisplayTests {
 
         // Edit the newly added preset
         await MainActor.run {
-            vm.updateChannelPreset(at: 1, with: "https://example.com/preset2.m3u8")
+            vm.updateChannelPreset(at: 1, url: "https://example.com/preset2.m3u8")
         }
-        let editedPresets = defaults.stringArray(forKey: ContentView.channelPresetsKey) ?? []
+        let editedPresets = persistedPresetURLs(defaults)
         #expect(editedPresets[1] == "https://example.com/preset2.m3u8")
 
         // Simulate returning to main screen
@@ -365,7 +370,7 @@ struct AutoSignDisplayTests {
             vm.removeChannelPreset(at: 1)
         }
         #expect(vm.channelPresets.count == 1)
-        let finalPresets = defaults.stringArray(forKey: ContentView.channelPresetsKey) ?? []
+        let finalPresets = persistedPresetURLs(defaults)
         #expect(finalPresets.count == 1)
         #expect(finalPresets[0] == "https://example.com/preset1.m3u8")
 
@@ -388,7 +393,7 @@ struct AutoSignDisplayTests {
         // Add three presets in sequence
         await MainActor.run {
             vm.addChannelPreset()
-            vm.updateChannelPreset(at: 1, with: "https://example.com/new1.m3u8")
+            vm.updateChannelPreset(at: 1, url: "https://example.com/new1.m3u8")
         }
 
         vm.stopRetryTimer()
@@ -398,7 +403,7 @@ struct AutoSignDisplayTests {
 
         await MainActor.run {
             vm.addChannelPreset()
-            vm.updateChannelPreset(at: 2, with: "https://example.com/new2.m3u8")
+            vm.updateChannelPreset(at: 2, url: "https://example.com/new2.m3u8")
         }
 
         vm.stopRetryTimer()
@@ -406,9 +411,9 @@ struct AutoSignDisplayTests {
 
         // Verify all three presets persist
         #expect(vm.channelPresets.count == 3)
-        #expect(vm.channelPresets[0] == "https://example.com/original.m3u8")
-        #expect(vm.channelPresets[1] == "https://example.com/new1.m3u8")
-        #expect(vm.channelPresets[2] == "https://example.com/new2.m3u8")
+        #expect(vm.channelPresets[0].url == "https://example.com/original.m3u8")
+        #expect(vm.channelPresets[1].url == "https://example.com/new1.m3u8")
+        #expect(vm.channelPresets[2].url == "https://example.com/new2.m3u8")
 
         vm.stopRetryTimer()
     }
@@ -440,8 +445,7 @@ struct AutoSignDisplayTests {
 
         // Presets should remain unchanged
         #expect(vm.channelPresets.count == 2)
-        let persistedCount = defaults.stringArray(forKey: ContentView.channelPresetsKey)?.count ?? 0
-        #expect(persistedCount == 2)
+        #expect(persistedPresetURLs(defaults).count == 2)
 
         vm.stopRetryTimer()
     }
@@ -470,8 +474,7 @@ struct AutoSignDisplayTests {
 
         // Presets should remain unchanged
         #expect(vm.channelPresets.count == 3)
-        let persistedCount = defaults.stringArray(forKey: ContentView.channelPresetsKey)?.count ?? 0
-        #expect(persistedCount == 3)
+        #expect(persistedPresetURLs(defaults).count == 3)
 
         vm.stopRetryTimer()
     }
@@ -492,14 +495,14 @@ struct AutoSignDisplayTests {
         let vm = StreamViewModel(logger: TestLogger())
 
         // Verify initial state
-        #expect(vm.channelPresets[0] == managedPresets[0])
+        #expect(vm.channelPresets[0].url == managedPresets[0])
 
         // Attempt to edit preset (should be ignored)
-        vm.updateChannelPreset(at: 0, with: "https://hacker.example.com/bad.m3u8")
+        vm.updateChannelPreset(at: 0, url: "https://hacker.example.com/bad.m3u8")
 
         // Preset should remain unchanged
-        #expect(vm.channelPresets[0] == managedPresets[0])
-        let persistedValue = defaults.stringArray(forKey: ContentView.channelPresetsKey)?[0] ?? ""
+        #expect(vm.channelPresets[0].url == managedPresets[0])
+        let persistedValue = persistedPresetURLs(defaults).first ?? ""
         #expect(persistedValue == managedPresets[0])
 
         vm.stopRetryTimer()
@@ -551,6 +554,94 @@ struct AutoSignDisplayTests {
         #expect(vm.channelPresets.count == 2)
         #expect(vm.channelPresetsManaged == true)
 
+        vm.stopRetryTimer()
+    }
+
+    // MARK: - Named Preset Support
+
+    @Test func managedConfigAcceptsDictPresetsWithNames() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        let config: [String: Any] = [
+            AppConfigKeys.channelPresets: [
+                ["Name": "Local News", "URL": "https://a.example.com/1.m3u8"],
+                ["URL": "https://b.example.com/2.m3u8"],                       // Name omitted
+                ["Name": "", "URL": "https://c.example.com/3.m3u8"],           // empty Name allowed
+                ["Name": "Ignored (no URL)"],                                  // dropped — URL required
+                ["Name": "Ignored (empty URL)", "URL": "  "]                   // dropped — URL blank
+            ]
+        ]
+
+        await MainActor.run {
+            defaults.set(config, forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        #expect(vm.channelPresets.count == 3)
+        #expect(vm.channelPresets[0] == ChannelPreset(name: "Local News", url: "https://a.example.com/1.m3u8"))
+        #expect(vm.channelPresets[1] == ChannelPreset(name: "", url: "https://b.example.com/2.m3u8"))
+        #expect(vm.channelPresets[2] == ChannelPreset(name: "", url: "https://c.example.com/3.m3u8"))
+        #expect(vm.channelPresetsManaged == true)
+        vm.stopRetryTimer()
+    }
+
+    @Test func legacyStringPresetsMigrateOnRead() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        // Simulate a pre-migration install: presets stored as [String].
+        defaults.set(false, forKey: ContentView.channelPresetsManagedKey)
+        defaults.set(
+            ["https://legacy.example.com/a.m3u8", "https://legacy.example.com/b.m3u8"],
+            forKey: ContentView.channelPresetsKey
+        )
+
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        #expect(vm.channelPresets.count == 2)
+        #expect(vm.channelPresets[0] == ChannelPreset(name: "", url: "https://legacy.example.com/a.m3u8"))
+        #expect(vm.channelPresets[1] == ChannelPreset(name: "", url: "https://legacy.example.com/b.m3u8"))
+        // Init should have rewritten the value in the new dict form.
+        #expect(defaults.array(forKey: ContentView.channelPresetsKey) is [[String: String]])
+        vm.stopRetryTimer()
+    }
+
+    @Test func nameEditPersistsAndRoundTrips() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        defaults.set(false, forKey: ContentView.channelPresetsManagedKey)
+        defaults.set(
+            [["Name": "", "URL": "https://a.example.com/1.m3u8"]],
+            forKey: ContentView.channelPresetsKey
+        )
+
+        @MainActor func makeVM() -> StreamViewModel { StreamViewModel(logger: TestLogger()) }
+
+        var vm = await MainActor.run { makeVM() }
+        await MainActor.run { vm.updateChannelPresetName(at: 0, name: "Homepage") }
+        #expect(vm.channelPresets[0].name == "Homepage")
+
+        // Re-init and check the name survived.
+        vm.stopRetryTimer()
+        vm = await MainActor.run { makeVM() }
+        #expect(vm.channelPresets[0].name == "Homepage")
+        #expect(vm.channelPresets[0].url == "https://a.example.com/1.m3u8")
+        vm.stopRetryTimer()
+    }
+
+    @Test func managedModeIgnoresNameEditAttempts() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        defaults.set(
+            [["Name": "Locked", "URL": "https://admin.example.com/1.m3u8"]],
+            forKey: ContentView.channelPresetsKey
+        )
+        defaults.set(true, forKey: ContentView.channelPresetsManagedKey)
+
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        #expect(vm.channelPresets[0].name == "Locked")
+        vm.updateChannelPresetName(at: 0, name: "Hijacked")
+        #expect(vm.channelPresets[0].name == "Locked")
         vm.stopRetryTimer()
     }
 }

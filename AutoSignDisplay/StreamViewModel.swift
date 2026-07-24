@@ -8,13 +8,48 @@
 import Foundation
 import AVKit
 
+/// One entry in the Stream Presets list. `name` is optional (empty means "no
+/// name set" — the UI falls back to the URL). Persisted in UserDefaults as
+/// `[String: String]` under keys `Name` / `URL`; the same keys appear in the
+/// managed-config plist so a single decoder handles both.
+struct ChannelPreset: Equatable {
+    var name: String
+    var url: String
+
+    static let managedNameKey = "Name"
+    static let managedURLKey = "URL"
+
+    var dictionaryRepresentation: [String: String] {
+        [Self.managedNameKey: name, Self.managedURLKey: url]
+    }
+
+    /// New-format dict from managed config or persisted UserDefaults.
+    /// URL is required and must be non-empty after whitespace trim.
+    static func fromDictionary(_ dict: [String: Any]) -> ChannelPreset? {
+        guard let url = dict[managedURLKey] as? String,
+              !url.trimmingCharacters(in: .whitespaces).isEmpty else {
+            return nil
+        }
+        let name = (dict[managedNameKey] as? String) ?? ""
+        return ChannelPreset(name: name, url: url)
+    }
+
+    /// Legacy format: managed config or persisted UserDefaults stored the presets
+    /// as `[String]` (URLs only). Convert to a nameless ChannelPreset.
+    static func fromLegacyString(_ url: String) -> ChannelPreset? {
+        let trimmed = url.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return nil }
+        return ChannelPreset(name: "", url: url)
+    }
+}
+
 class StreamViewModel: ObservableObject {
     static let maxChannelPresets = 20
-    static let defaultPresets = [
-        "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-        "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-        "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8",
-        "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+    static let defaultPresets: [ChannelPreset] = [
+        ChannelPreset(name: "", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"),
+        ChannelPreset(name: "", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"),
+        ChannelPreset(name: "", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"),
+        ChannelPreset(name: "", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8")
     ]
 
     @Published var streamURL: String
@@ -22,7 +57,7 @@ class StreamViewModel: ObservableObject {
     @Published var retryTimeout: Double
     @Published var autoResume: Bool
     @Published var settingsDisabled: Bool
-    @Published var channelPresets: [String]
+    @Published var channelPresets: [ChannelPreset]
     @Published var channelPresetsManaged: Bool
     @Published var selectedPresetIndex: Int?
     @Published var defaultChannelURL: String?
@@ -49,16 +84,21 @@ class StreamViewModel: ObservableObject {
         self.autoResume = defaults.bool(forKey: ContentView.autoResumeKey)
         self.settingsDisabled = defaults.bool(forKey: ContentView.settingsDisabledKey)
 
-        let storedPresets = defaults.stringArray(forKey: ContentView.channelPresetsKey)
-        let sanitizedPresets: [String]
-        if let storedPresets, !storedPresets.isEmpty {
-            sanitizedPresets = Array(storedPresets.prefix(StreamViewModel.maxChannelPresets))
-            if sanitizedPresets.count != storedPresets.count {
-                defaults.set(sanitizedPresets, forKey: ContentView.channelPresetsKey)
+        let sanitizedPresets: [ChannelPreset]
+        if let stored = StreamViewModel.loadPresets(from: defaults), !stored.isEmpty {
+            sanitizedPresets = Array(stored.prefix(StreamViewModel.maxChannelPresets))
+            // If storage was over-cap, trim it back. Otherwise leave the on-disk shape
+            // alone — loadPresets handles both new and legacy formats, so migration
+            // happens naturally on the next mutation.
+            let storedCount = (defaults.object(forKey: ContentView.channelPresetsKey) as? [Any])?.count ?? 0
+            if storedCount != sanitizedPresets.count {
+                defaults.set(sanitizedPresets.map { $0.dictionaryRepresentation },
+                             forKey: ContentView.channelPresetsKey)
             }
         } else {
             sanitizedPresets = StreamViewModel.defaultPresets
-            defaults.set(sanitizedPresets, forKey: ContentView.channelPresetsKey)
+            defaults.set(sanitizedPresets.map { $0.dictionaryRepresentation },
+                         forKey: ContentView.channelPresetsKey)
             defaults.set(false, forKey: ContentView.channelPresetsManagedKey)
         }
         self.channelPresets = sanitizedPresets
@@ -83,18 +123,43 @@ class StreamViewModel: ObservableObject {
         let storedIndex = defaults.object(forKey: ContentView.selectedPresetIndexKey) as? Int
         if let storedIndex, channelPresets.indices.contains(storedIndex) {
             self.selectedPresetIndex = storedIndex
-            let presetURL = channelPresets[storedIndex]
+            let presetURL = channelPresets[storedIndex].url
             if !presetURL.isEmpty, self.streamURL != presetURL {
                 self.streamURL = presetURL
                 defaults.set(presetURL, forKey: ContentView.lastStreamURLKey)
             }
-        } else if let matchIndex = channelPresets.firstIndex(of: self.streamURL), !self.streamURL.isEmpty {
+        } else if let matchIndex = channelPresets.firstIndex(where: { $0.url == self.streamURL }),
+                  !self.streamURL.isEmpty {
             self.selectedPresetIndex = matchIndex
             defaults.set(matchIndex, forKey: ContentView.selectedPresetIndexKey)
         } else {
             self.selectedPresetIndex = nil
             defaults.removeObject(forKey: ContentView.selectedPresetIndexKey)
         }
+    }
+
+    /// Read presets from defaults. Accepts both the new `[[String: String]]` form
+    /// and legacy `[String]` form. Returns nil if the key is absent or every entry
+    /// is malformed; caller re-seeds defaults in that case.
+    ///
+    /// Uses `object(forKey:)` and iterates as `[Any]` because `array(forKey:)`
+    /// returns nil for arrays of dictionaries imported via `defaults import`
+    /// (CFPreferences round-trip subtly changes the collection's Swift-bridged type).
+    static func loadPresets(from defaults: UserDefaults) -> [ChannelPreset]? {
+        guard let raw = defaults.object(forKey: ContentView.channelPresetsKey) as? [Any],
+              !raw.isEmpty else {
+            return nil
+        }
+        let presets = raw.compactMap { item -> ChannelPreset? in
+            if let dict = item as? [String: Any] {
+                return ChannelPreset.fromDictionary(dict)
+            }
+            if let url = item as? String {
+                return ChannelPreset.fromLegacyString(url)
+            }
+            return nil
+        }
+        return presets.isEmpty ? nil : presets
     }
 
     func updateSettings(isPlayingOnOpen: Bool, retryTimeout: Double, autoResume: Bool, settingsDisabled: Bool = false) {
@@ -115,7 +180,7 @@ class StreamViewModel: ObservableObject {
 
         if let selectedPresetIndex {
             self.selectedPresetIndex = selectedPresetIndex
-        } else if let matchIndex = channelPresets.firstIndex(of: url), !url.isEmpty {
+        } else if let matchIndex = channelPresets.firstIndex(where: { $0.url == url }), !url.isEmpty {
             self.selectedPresetIndex = matchIndex
         } else {
             self.selectedPresetIndex = nil
@@ -125,12 +190,12 @@ class StreamViewModel: ObservableObject {
 
     func selectPreset(at index: Int) {
         guard channelPresets.indices.contains(index) else { return }
-        updateStreamURL(channelPresets[index], selectedPresetIndex: index)
+        updateStreamURL(channelPresets[index].url, selectedPresetIndex: index)
     }
 
     func addChannelPreset() {
         guard !channelPresetsManaged, channelPresets.count < StreamViewModel.maxChannelPresets else { return }
-        channelPresets.append("")
+        channelPresets.append(ChannelPreset(name: "", url: ""))
         persistChannelPresets()
     }
 
@@ -148,9 +213,9 @@ class StreamViewModel: ObservableObject {
         persistChannelPresets()
     }
 
-    func updateChannelPreset(at index: Int, with url: String) {
+    func updateChannelPreset(at index: Int, url: String) {
         guard channelPresets.indices.contains(index), !channelPresetsManaged else { return }
-        channelPresets[index] = url
+        channelPresets[index].url = url
         persistChannelPresets()
 
         if selectedPresetIndex == index {
@@ -158,6 +223,12 @@ class StreamViewModel: ObservableObject {
         } else if selectedPresetIndex == nil, streamURL == url {
             updateStreamURL(url)
         }
+    }
+
+    func updateChannelPresetName(at index: Int, name: String) {
+        guard channelPresets.indices.contains(index), !channelPresetsManaged else { return }
+        channelPresets[index].name = name
+        persistChannelPresets()
     }
 
     var canAddMorePresets: Bool {
@@ -212,7 +283,8 @@ class StreamViewModel: ObservableObject {
     }
 
     private func persistChannelPresets() {
-        UserDefaults.standard.set(channelPresets, forKey: ContentView.channelPresetsKey)
+        UserDefaults.standard.set(channelPresets.map { $0.dictionaryRepresentation },
+                                  forKey: ContentView.channelPresetsKey)
     }
 
     private func persistSelectedPresetIndex() {

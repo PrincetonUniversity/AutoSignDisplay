@@ -19,13 +19,30 @@
     <key>RetryTimeout</key>
     <real>5.0</real>
 
-    <!-- Array of strings: predefined stream presets (max 20 entries) -->
+    <!-- Array of dicts: predefined stream presets (max 20 entries).
+         Each entry has a required URL and an optional Name. When Name is set,
+         the app shows it in the Stream Presets list instead of the raw URL.
+         For backward compatibility, plain <string> URL entries are still
+         accepted (they become name-less presets). -->
     <key>ChannelPresets</key>
     <array>
-      <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
-      <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
-      <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
-      <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+      <dict>
+        <key>Name</key>
+        <string>Local News</string>
+        <key>URL</key>
+        <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+      </dict>
+      <dict>
+        <key>Name</key>
+        <string>Weather</string>
+        <key>URL</key>
+        <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+      </dict>
+      <dict>
+        <!-- Name omitted: the URL will show in the list. -->
+        <key>URL</key>
+        <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+      </dict>
     </array>
 
     <!-- String: default channel URL selected on launch (should match one of the presets) -->

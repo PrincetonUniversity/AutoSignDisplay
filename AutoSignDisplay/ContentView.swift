@@ -109,7 +109,7 @@ struct ContentView: View {
                                         AccessibilityNotification.Announcement("Selected preset \(index + 1)").post()
                                     } label: {
                                         HStack {
-                                            Text(preset.isEmpty ? "Preset \(index + 1)" : preset)
+                                            Text(presetDisplayText(preset, index: index))
                                                 .lineLimit(1)
                                                 .truncationMode(.middle)
                                             if viewModel.selectedPresetIndex == index {
@@ -125,7 +125,7 @@ struct ContentView: View {
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                     }
                                     .buttonStyle(.borderedProminent)
-                                    .accessibilityLabel(presetAccessibilityLabel(index: index, url: preset))
+                                    .accessibilityLabel(presetAccessibilityLabel(index: index, preset: preset))
                                     .accessibilityAddTraits(viewModel.selectedPresetIndex == index ? .isSelected : [])
                                 }
                             }
@@ -218,11 +218,26 @@ struct ContentView: View {
 }
 
 private extension ContentView {
-    // A URL spelled out character-by-character is unusable in VoiceOver. Reduce it to
-    // the last path component (or host) so the row reads as e.g. "Preset 1, x36xhzz.m3u8".
-    func presetAccessibilityLabel(index: Int, url: String) -> String {
+    /// What renders in the main preset list row. Prefer the admin- or user-supplied
+    /// name; fall back to the URL; fall back to "Preset N" for a totally-empty row
+    /// (only possible transiently when a user has just tapped Add Preset).
+    func presetDisplayText(_ preset: ChannelPreset, index: Int) -> String {
+        if !preset.name.isEmpty { return preset.name }
+        if !preset.url.isEmpty { return preset.url }
+        return "Preset \(index + 1)"
+    }
+
+    // A URL spelled out character-by-character is unusable in VoiceOver. Prefer the
+    // preset's name; otherwise reduce the URL to its filename or host so the row
+    // reads as e.g. "Preset 1, x36xhzz.m3u8".
+    func presetAccessibilityLabel(index: Int, preset: ChannelPreset) -> String {
         let position = "Preset \(index + 1)"
-        guard !url.isEmpty, let parsed = URL(string: url) else { return "\(position), empty" }
+        if !preset.name.isEmpty {
+            return "\(position), \(preset.name)"
+        }
+        guard !preset.url.isEmpty, let parsed = URL(string: preset.url) else {
+            return "\(position), empty"
+        }
         let filename = parsed.lastPathComponent
         if !filename.isEmpty, filename != "/" {
             return "\(position), \(filename)"

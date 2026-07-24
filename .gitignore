@@ -18,6 +18,9 @@ Carthage/Build/
 # Swift Package Manager
 .build/
 
+# Editor / IDE local config
+.vscode/
+
 # Various temporary files and logs
 *.swp
 *.lock

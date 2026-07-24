@@ -114,6 +114,9 @@ struct ContentView: View {
                                                 .truncationMode(.middle)
                                             if viewModel.selectedPresetIndex == index {
                                                 Spacer()
+                                                Text("Selected")
+                                                    .font(.caption)
+                                                    .accessibilityHidden(true)
                                                 Image(systemName: "checkmark.circle.fill")
                                                     .foregroundColor(.accentColor)
                                                     .accessibilityHidden(true)

@@ -78,6 +78,7 @@ struct ContentView: View {
                             )
                         )
                         .padding(.vertical, 8)
+                        .accessibilityLabel("HLS stream URL")
 
                         Button {
                             if let url = URL(string: viewModel.streamURL) {
@@ -105,6 +106,7 @@ struct ContentView: View {
                                 ForEach(Array(viewModel.channelPresets.enumerated()), id: \.offset) { index, preset in
                                     Button {
                                         viewModel.selectPreset(at: index)
+                                        AccessibilityNotification.Announcement("Selected preset \(index + 1)").post()
                                     } label: {
                                         HStack {
                                             Text(preset.isEmpty ? "Preset \(index + 1)" : preset)
@@ -114,11 +116,14 @@ struct ContentView: View {
                                                 Spacer()
                                                 Image(systemName: "checkmark.circle.fill")
                                                     .foregroundColor(.accentColor)
+                                                    .accessibilityHidden(true)
                                             }
                                         }
                                         .frame(maxWidth: .infinity, alignment: .leading)
                                     }
                                     .buttonStyle(.borderedProminent)
+                                    .accessibilityLabel(presetAccessibilityLabel(index: index, url: preset))
+                                    .accessibilityAddTraits(viewModel.selectedPresetIndex == index ? .isSelected : [])
                                 }
                             }
 
@@ -139,6 +144,7 @@ struct ContentView: View {
                         }
                         .buttonStyle(.bordered)
                         .disabled(viewModel.channelPresetsManaged)
+                        .accessibilityHint(viewModel.channelPresetsManaged ? "Managed by your administrator" : "")
 
                         Button {
                             activeSheet = .settings
@@ -148,6 +154,7 @@ struct ContentView: View {
                         }
                         .buttonStyle(.bordered)
                         .disabled(viewModel.settingsDisabled)
+                        .accessibilityHint(viewModel.settingsDisabled ? "Managed by your administrator" : "")
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -208,6 +215,21 @@ struct ContentView: View {
 }
 
 private extension ContentView {
+    // A URL spelled out character-by-character is unusable in VoiceOver. Reduce it to
+    // the last path component (or host) so the row reads as e.g. "Preset 1, x36xhzz.m3u8".
+    func presetAccessibilityLabel(index: Int, url: String) -> String {
+        let position = "Preset \(index + 1)"
+        guard !url.isEmpty, let parsed = URL(string: url) else { return "\(position), empty" }
+        let filename = parsed.lastPathComponent
+        if !filename.isEmpty, filename != "/" {
+            return "\(position), \(filename)"
+        }
+        if let host = parsed.host, !host.isEmpty {
+            return "\(position), \(host)"
+        }
+        return position
+    }
+
     @MainActor
     func scheduleAutoPlayPresentation() {
         DispatchQueue.main.async {
@@ -223,6 +245,7 @@ private extension ContentView {
 
             guard let player = viewModel.player else {
                 presentationFailed = true
+                AccessibilityNotification.Announcement("Failed to present player. Retrying.").post()
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
                     if viewModel.player == nil || viewModel.player?.currentItem == nil {
                         viewModel.playStream()

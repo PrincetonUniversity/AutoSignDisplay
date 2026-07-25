@@ -1,45 +1,70 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
 
-DEVICE_ID="22EE280A-72F6-46C5-BA67-357D68316385"
-BUNDLE_ID="edu.princeton.autosigndisplay"
+# Assert that AutoSignDisplay is in a genuinely unmanaged state, exiting non-zero if
+# it is not. Managed state is sticky in a simulator, so a previous --managed run can
+# silently poison later unmanaged testing.
+#
+# Usage (runnable from any directory):
+#   ./scripts/verify-unmanaged.sh [--udid <UDID>] [--fix]
+#
+#   --fix   clear the state instead of only reporting it
 
-echo "=========================================="
-echo "App Managed Configuration Status Check"
-echo "=========================================="
-echo ""
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/simulator.sh"
 
-echo "1. Checking for com.apple.configuration.managed key:"
-MANAGED_CONFIG=$(xcrun simctl spawn "$DEVICE_ID" defaults read "$BUNDLE_ID" com.apple.configuration.managed 2>&1)
+UDID=""
+FIX=0
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --udid) UDID="$2"; shift 2 ;;
+    --fix) FIX=1; shift ;;
+    -h|--help) sed -n '4,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) echo "Unknown arg: $1" >&2; exit 2 ;;
+  esac
+done
+
+UDID="$(resolve_udid "$UDID")"
+echo "[verify] device: $UDID ($(device_state "$UDID"))"
+
+read_default() {
+  xcrun simctl spawn "$UDID" defaults read "$BUNDLE_ID" "$1" 2>&1 || true
+}
+
+FAILURES=0
+
+MANAGED_CONFIG="$(read_default com.apple.configuration.managed)"
 if echo "$MANAGED_CONFIG" | grep -q "does not exist"; then
-    echo "   ✅ CORRECT: No managed config present (key not found)"
+  echo "[verify] ok: no managed configuration present"
 else
-    echo "   ❌ ERROR: App has managed config:"
-    echo "$MANAGED_CONFIG"
+  echo "[verify] FAIL: managed configuration is present" >&2
+  FAILURES=$((FAILURES + 1))
 fi
 
-echo ""
-echo "2. Checking channelPresetsManaged flag:"
-MANAGED_FLAG=$(xcrun simctl spawn "$DEVICE_ID" defaults read "$BUNDLE_ID" channelPresetsManaged 2>&1)
-if echo "$MANAGED_FLAG" | grep -q "does not exist"; then
-    echo "   ✅ CORRECT: Flag not set"
-elif [ "$MANAGED_FLAG" = "0" ]; then
-    echo "   ✅ CORRECT: Flag is false (not managed)"
+MANAGED_FLAG="$(read_default channelPresetsManaged)"
+if echo "$MANAGED_FLAG" | grep -q "does not exist" || [[ "$MANAGED_FLAG" == "0" ]]; then
+  echo "[verify] ok: channelPresetsManaged is not set"
 else
-    echo "   ❌ ERROR: Managed flag is set to: $MANAGED_FLAG"
+  echo "[verify] FAIL: channelPresetsManaged is $MANAGED_FLAG" >&2
+  FAILURES=$((FAILURES + 1))
 fi
 
-echo ""
-echo "3. App will use default presets:"
-DEFAULT_PRESETS=$(xcrun simctl spawn "$DEVICE_ID" defaults read "$BUNDLE_ID" channelPresets 2>&1)
-if echo "$DEFAULT_PRESETS" | grep -q "test-streams.mux.dev"; then
-    echo "   ✅ CORRECT: Using default test presets"
-elif echo "$DEFAULT_PRESETS" | grep -q "does not exist"; then
-    echo "   ℹ️  Presets not yet initialized (will use defaults on first app load)"
-else
-    echo "   Current presets: $DEFAULT_PRESETS"
+if [[ $FAILURES -eq 0 ]]; then
+  echo "[verify] app is unmanaged"
+  exit 0
 fi
 
-echo ""
-echo "=========================================="
-echo "Status: App is UNMANAGED (correct!)"
-echo "=========================================="
+if [[ $FIX -eq 1 ]]; then
+  echo "[verify] clearing managed state"
+  # Remove the whole domain: clearing only com.apple.configuration.managed leaves
+  # the mirrored app-side keys behind, which is what makes this state so sticky.
+  xcrun simctl spawn "$UDID" defaults delete "$BUNDLE_ID" >/dev/null 2>&1 || true
+  echo "[verify] cleared — relaunch the app to re-seed defaults"
+  exit 0
+fi
+
+cat >&2 <<EOF
+
+[verify] to clear it:
+  ./scripts/verify-unmanaged.sh --udid $UDID --fix
+EOF
+exit 1

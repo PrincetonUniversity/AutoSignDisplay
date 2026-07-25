@@ -367,16 +367,39 @@ class StreamViewModel: ObservableObject {
         return candidate.trimmingCharacters(in: .whitespaces) == settingsPIN
     }
 
-    /// Persists a PIN. Blank clears the lock. Refused when MDM owns the PIN.
-    func updateSettingsPIN(_ pin: String) {
-        guard !settingsPINManaged else { return }
+    /// Shortest PIN the UI will store. A one-character PIN is almost always a
+    /// half-typed one, and it locks the very screen needed to correct it.
+    static let minimumSettingsPINLength = 4
+
+    /// Digits only, at least `minimumSettingsPINLength`.
+    static func isValidSettingsPIN(_ candidate: String) -> Bool {
+        let trimmed = candidate.trimmingCharacters(in: .whitespaces)
+        guard trimmed.count >= minimumSettingsPINLength else { return false }
+        return trimmed.allSatisfy(\.isNumber)
+    }
+
+    /// Sets a PIN, returning false and changing nothing if it is invalid or MDM-owned.
+    ///
+    /// Deliberately not a property setter: an earlier version wrote through on every
+    /// keystroke, so typing the first digit of a longer PIN stored a one-character
+    /// PIN and locked the user out.
+    @discardableResult
+    func setSettingsPIN(_ pin: String) -> Bool {
+        guard !settingsPINManaged else { return false }
+        guard StreamViewModel.isValidSettingsPIN(pin) else { return false }
         let trimmed = pin.trimmingCharacters(in: .whitespaces)
         settingsPIN = trimmed
-        if trimmed.isEmpty {
-            UserDefaults.standard.removeObject(forKey: ContentView.settingsPINKey)
-        } else {
-            UserDefaults.standard.set(trimmed, forKey: ContentView.settingsPINKey)
-        }
+        UserDefaults.standard.set(trimmed, forKey: ContentView.settingsPINKey)
+        return true
+    }
+
+    /// Removes the lock. Refused when MDM owns the PIN.
+    @discardableResult
+    func clearSettingsPIN() -> Bool {
+        guard !settingsPINManaged else { return false }
+        settingsPIN = ""
+        UserDefaults.standard.removeObject(forKey: ContentView.settingsPINKey)
+        return true
     }
 
     func updateConfirmBeforeDelete(_ enabled: Bool) {

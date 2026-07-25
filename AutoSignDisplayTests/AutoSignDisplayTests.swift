@@ -717,7 +717,7 @@ struct AutoSignDisplayTests {
         @MainActor func makeVM() -> StreamViewModel { StreamViewModel(logger: TestLogger()) }
 
         var vm = await MainActor.run { makeVM() }
-        await MainActor.run { vm.updateSettingsPIN("4821") }
+        await MainActor.run { vm.setSettingsPIN("4821") }
         #expect(vm.settingsLocked)
         #expect(defaults.string(forKey: ContentView.settingsPINKey) == "4821")
 
@@ -731,11 +731,58 @@ struct AutoSignDisplayTests {
         vm = await MainActor.run { makeVM() }
         #expect(vm.settingsLocked, "PIN must survive a relaunch.")
 
-        // Blank clears the lock.
-        await MainActor.run { vm.updateSettingsPIN("  ") }
+        // Removing the lock is now an explicit action, not a blank write.
+        await MainActor.run { vm.clearSettingsPIN() }
         #expect(vm.settingsLocked == false)
         #expect(defaults.object(forKey: ContentView.settingsPINKey) == nil)
         vm.stopRetryTimer()
+    }
+
+    /// Regression guard for the lockout that shipped: the PIN field wrote through on
+    /// every keystroke, so typing the first digit of a longer PIN stored a
+    /// one-character PIN — locking the very screen needed to undo it.
+    @Test func shortOrNonNumericPINsAreRefused() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+
+        for rejected in ["1", "12", "123", "", "   ", "12a4", "abcd", "12 34"] {
+            let applied = await MainActor.run { vm.setSettingsPIN(rejected) }
+            #expect(!applied, "\"\(rejected)\" must not be accepted as a PIN.")
+            #expect(vm.settingsLocked == false)
+            #expect(defaults.object(forKey: ContentView.settingsPINKey) == nil)
+        }
+
+        // Four digits is the floor.
+        let applied = await MainActor.run { vm.setSettingsPIN("1234") }
+        #expect(applied)
+        #expect(vm.settingsLocked)
+        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "1234")
+        vm.stopRetryTimer()
+    }
+
+    @Test func managedPINShorterThanTheMinimumIsRejected() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        // A short managed PIN locks a fleet out just as effectively.
+        await MainActor.run {
+            defaults.set([AppConfigKeys.settingsPIN: "1"],
+                         forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.object(forKey: ContentView.settingsPINKey) == nil)
+        #expect(defaults.bool(forKey: ContentView.settingsPINManagedKey) == false)
+
+        // Managed PINs need not be numeric — an administrator may use a passphrase —
+        // but they do have to clear the length floor.
+        await resetDefaults()
+        await MainActor.run {
+            defaults.set([AppConfigKeys.settingsPIN: "lobby-2026"],
+                         forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "lobby-2026")
     }
 
     @Test func managedSettingsPINCannotBeChangedOnDevice() async throws {
@@ -756,9 +803,9 @@ struct AutoSignDisplayTests {
         #expect(vm.isCorrectSettingsPIN("9999"))
 
         // A local user must not be able to change or clear it.
-        await MainActor.run { vm.updateSettingsPIN("0000") }
+        await MainActor.run { vm.setSettingsPIN("0000") }
         #expect(vm.settingsPIN == "9999")
-        await MainActor.run { vm.updateSettingsPIN("") }
+        await MainActor.run { vm.clearSettingsPIN() }
         #expect(vm.settingsPIN == "9999")
         vm.stopRetryTimer()
     }
@@ -822,8 +869,8 @@ struct AutoSignDisplayTests {
 
         // A user sets a PIN on-device and forgets it.
         let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
-        await MainActor.run { vm.updateSettingsPIN("unknown-pin") }
-        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "unknown-pin")
+        await MainActor.run { vm.setSettingsPIN("735192") }
+        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "735192")
         vm.stopRetryTimer()
 
         // Pushing a known PIN overrides it, which is the device-side recovery route.
@@ -836,7 +883,7 @@ struct AutoSignDisplayTests {
 
         let recovered = await MainActor.run { StreamViewModel(logger: TestLogger()) }
         #expect(recovered.isCorrectSettingsPIN("0000"))
-        #expect(!recovered.isCorrectSettingsPIN("unknown-pin"))
+        #expect(!recovered.isCorrectSettingsPIN("735192"))
         recovered.stopRetryTimer()
     }
 
@@ -848,7 +895,7 @@ struct AutoSignDisplayTests {
         let defaults = UserDefaults.standard
 
         let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
-        await MainActor.run { vm.updateSettingsPIN("user-pin") }
+        await MainActor.run { vm.setSettingsPIN("864209") }
         vm.stopRetryTimer()
 
         await MainActor.run {
@@ -856,7 +903,7 @@ struct AutoSignDisplayTests {
                          forKey: "com.apple.configuration.managed")
             AppConfig.applyConfiguration(logger: TestLogger())
         }
-        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "user-pin",
+        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "864209",
                 "Recovery requires pushing a known PIN, or reinstalling the app.")
     }
 

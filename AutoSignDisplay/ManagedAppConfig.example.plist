@@ -12,7 +12,8 @@
     <key>ViewOnlyMode</key>
     <false/>
 
-    <!-- String: require this PIN to open Settings. A deterrent, not security:
+    <!-- String, at least 4 characters: require this PIN to open Settings.
+         A deterrent, not security:
          stored in preferences, not the keychain. -->
     <key>SettingsPIN</key>
     <string>4821</string>

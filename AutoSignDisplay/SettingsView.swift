@@ -200,10 +200,21 @@ struct SettingsGateView: View {
     @State private var showMismatch = false
 
     var body: some View {
-        if viewModel.settingsLocked && !unlocked {
-            pinPrompt
-        } else {
-            settings
+        Group {
+            if unlocked {
+                settings
+            } else {
+                pinPrompt
+            }
+        }
+        // Decided once, on entry. Evaluating `settingsLocked` continuously meant
+        // that setting a PIN from inside Settings immediately swapped the screen for
+        // the PIN prompt — ejecting the user mid-session and demanding the PIN they
+        // had just created. Leaving and returning re-runs this and asks again.
+        .onAppear {
+            if !viewModel.settingsLocked {
+                unlocked = true
+            }
         }
     }
 
@@ -287,7 +298,8 @@ struct SettingsGateView: View {
             onConfirmBeforeDeleteChanged: { viewModel.updateConfirmBeforeDelete($0) },
             onDisplayTitleChanged: { viewModel.updateDisplayTitle($0) },
             onViewOnlyModeChanged: { viewModel.updateViewOnlyMode($0) },
-            onSettingsPINChanged: { viewModel.updateSettingsPIN($0) }
+            onSetPIN: { viewModel.setSettingsPIN($0) },
+            onClearPIN: { viewModel.clearSettingsPIN() }
         )
     }
 }
@@ -304,8 +316,10 @@ struct SettingsView: View {
     @Binding var confirmBeforeDelete: Bool
     @Binding var displayTitle: String
     @Binding var viewOnlyMode: Bool
+    /// Current PIN, read only to show whether one is set. Never bound to a field —
+    /// see `newPIN`.
     @Binding var settingsPIN: String
-    /// The PIN came from MDM, so the field is shown but not editable.
+    /// The PIN came from MDM, so it cannot be changed here.
     var settingsPINManaged: Bool
     /// Presets are read-only under MDM, so the delete-confirmation preference has
     /// nothing to act on and is hidden entirely rather than shown disabled.
@@ -314,7 +328,38 @@ struct SettingsView: View {
     var onConfirmBeforeDeleteChanged: (Bool) -> Void
     var onDisplayTitleChanged: (String) -> Void
     var onViewOnlyModeChanged: (Bool) -> Void
-    var onSettingsPINChanged: (String) -> Void
+    var onSetPIN: (String) -> Bool
+    var onClearPIN: () -> Void
+
+    /// Drafts. The PIN is only written when Set PIN is pressed: binding a field
+    /// straight to storage meant the first digit of a longer PIN took effect on its
+    /// own and locked the user out of this screen.
+    @State private var newPIN = ""
+    @State private var confirmPIN = ""
+    @State private var pinFeedback: String?
+
+    private var pinsMatch: Bool { newPIN == confirmPIN }
+
+    /// Says why Set PIN is unavailable, rather than leaving it inertly dimmed.
+    private var pinGuidance: String {
+        if let pinFeedback { return pinFeedback }
+        if newPIN.isEmpty {
+            return "Requires this PIN to open Settings. \(StreamViewModel.minimumSettingsPINLength) digits or more."
+        }
+        if !StreamViewModel.isValidSettingsPIN(newPIN) {
+            return "Use at least \(StreamViewModel.minimumSettingsPINLength) digits, numbers only."
+        }
+        if !pinsMatch {
+            return "The two entries do not match yet."
+        }
+        return "Press Set PIN to apply."
+    }
+    private var canSetPIN: Bool {
+        !settingsPINManaged
+            && !settingsDisabled
+            && StreamViewModel.isValidSettingsPIN(newPIN)
+            && pinsMatch
+    }
 
     var body: some View {
         ZStack {
@@ -407,23 +452,64 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
 
-                    LabeledTextField(
-                        label: "Settings PIN",
-                        placeholder: settingsPINManaged ? "Set by administrator" : "None",
-                        text: Binding(
-                            get: { settingsPIN },
-                            set: { onSettingsPINChanged($0) }
-                        ),
-                        disabled: settingsDisabled || settingsPINManaged,
-                        accessibilityLabelText: "Settings PIN"
+                    RowLabel(
+                        title: "Settings PIN",
+                        value: settingsPIN.isEmpty ? "Not set" : "Set"
                     )
                     .padding(.top, ScreenMetrics.fieldSpacing)
 
-                    Text(settingsPINManaged
-                         ? "Your administrator set this PIN. It cannot be changed here."
-                         : "Requires this PIN to open Settings. Leave blank for no lock.")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
+                    if settingsPINManaged {
+                        Text("Your administrator set this PIN. It cannot be changed here.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else {
+                        LabeledTextField(
+                            label: "New PIN",
+                            placeholder: "\(StreamViewModel.minimumSettingsPINLength)+ digits",
+                            text: $newPIN,
+                            disabled: settingsDisabled,
+                            accessibilityLabelText: "New settings PIN"
+                        )
+
+                        LabeledTextField(
+                            label: "Confirm",
+                            placeholder: "Re-enter",
+                            text: $confirmPIN,
+                            disabled: settingsDisabled,
+                            accessibilityLabelText: "Confirm new settings PIN"
+                        )
+
+                        HStack(spacing: ScreenMetrics.buttonSpacing) {
+                            Button {
+                                if onSetPIN(newPIN) {
+                                    pinFeedback = "PIN set."
+                                    newPIN = ""
+                                    confirmPIN = ""
+                                    AccessibilityNotification.Announcement("PIN set").post()
+                                } else {
+                                    pinFeedback = "Could not set that PIN."
+                                }
+                            } label: {
+                                CenteredRowLabel(title: "Set PIN")
+                            }
+                            .disabled(!canSetPIN)
+
+                            Button {
+                                onClearPIN()
+                                pinFeedback = "PIN removed."
+                                newPIN = ""
+                                confirmPIN = ""
+                                AccessibilityNotification.Announcement("PIN removed").post()
+                            } label: {
+                                DestructiveRowLabel(title: "Remove PIN")
+                            }
+                            .disabled(settingsDisabled || settingsPIN.isEmpty)
+                        }
+
+                        Text(pinGuidance)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
                 }
 
                 // Only meaningful when the user can actually delete presets.

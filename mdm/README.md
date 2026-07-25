@@ -36,7 +36,7 @@ a partial payload manages only what it names.
 |---|---|---|
 | `DisplayTitle` | String | Heading at the top of the main screen. Must be non-empty. Omit for the app's own name. |
 | `ViewOnlyMode` | Boolean | Reduce the main screen to the preset list. |
-| `SettingsPIN` | String | Require this PIN to open Settings. Must be non-empty. |
+| `SettingsPIN` | String | Require this PIN to open Settings. At least 4 characters. |
 | `PlayOnAppOpen` | Boolean | Begin playback at launch. |
 | `AutoResume` | Boolean | Rebuild the player when a stream stalls or the network drops. |
 | `SettingsDisabled` | Boolean | Lock the on-device Settings screen. |
@@ -88,6 +88,12 @@ otherwise a device configured this way could not be taken out of the mode from t
 couch. Combine it with `SettingsDisabled` or `SettingsPIN` if that matters.
 
 ### About `SettingsPIN`
+
+Must be at least 4 characters. Shorter values are rejected, because a one- or
+two-character PIN locks a fleet out as effectively as a long one while being
+trivial to guess. Managed PINs need not be numeric — a passphrase is fine — though
+the on-device field accepts digits only, since that is what a remote can enter
+comfortably.
 
 **This is a deterrent, not a security control.** The PIN is kept in the app's
 preferences, not the keychain, and it is compared as plain text. It stops a

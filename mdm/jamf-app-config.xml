@@ -36,7 +36,7 @@
   <key>ViewOnlyMode</key>
   <false/>
 
-  <!-- String, must be non-empty. Require this PIN to open Settings. Setting it
+  <!-- String, at least 4 characters. Require this PIN to open Settings. Setting it
        here also makes the on-device PIN field read-only, so a local user cannot
        change or remove an administrator's PIN.
 

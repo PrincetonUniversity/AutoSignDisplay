@@ -250,6 +250,10 @@ class AppConfig {
             let trimmed = pinValue.trimmingCharacters(in: .whitespaces)
             if trimmed.isEmpty {
                 logger.log("Rejected SettingsPIN: must not be empty")
+            } else if trimmed.count < StreamViewModel.minimumSettingsPINLength {
+                // Same floor the UI enforces. A one-character managed PIN locks a
+                // whole fleet out just as effectively as a mistyped local one.
+                logger.log("Rejected SettingsPIN: must be at least \(StreamViewModel.minimumSettingsPINLength) characters")
             } else {
                 defaults.set(trimmed, forKey: ContentView.settingsPINKey)
                 defaults.set(true, forKey: ContentView.settingsPINManagedKey)

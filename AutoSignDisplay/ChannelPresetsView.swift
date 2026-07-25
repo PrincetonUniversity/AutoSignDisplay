@@ -11,61 +11,114 @@ struct ChannelPresetsView: View {
     @ObservedObject var viewModel: StreamViewModel
     @Environment(\.dismiss) private var dismiss
 
+    /// Index awaiting delete confirmation. Non-nil drives the confirmation alert.
+    @State private var pendingDeleteIndex: Int?
+
     var body: some View {
-        NavigationView {
-            Form {
-                Section {
-                    if viewModel.channelPresets.isEmpty {
-                        Text("No presets available.")
-                    } else {
-                        ForEach(Array(viewModel.channelPresets.enumerated()), id: \.offset) { index, _ in
-                            PresetRow(
-                                index: index,
-                                name: nameBinding(for: index),
-                                url: urlBinding(for: index),
-                                managed: viewModel.channelPresetsManaged,
-                                onRemove: { viewModel.removeChannelPreset(at: index) },
-                                onSelect: {
-                                    viewModel.selectPreset(at: index)
-                                    dismiss()
-                                }
-                            )
-                        }
+        ZStack {
+            ModalBackground()
+            presetsContent
+        }
+        .alert(
+            "Delete Preset?",
+            isPresented: Binding(
+                get: { pendingDeleteIndex != nil },
+                set: { if !$0 { pendingDeleteIndex = nil } }
+            ),
+            presenting: pendingDeleteIndex
+        ) { index in
+            Button("Delete", role: .destructive) {
+                viewModel.removeChannelPreset(at: index)
+                pendingDeleteIndex = nil
+            }
+            Button("Cancel", role: .cancel) {
+                pendingDeleteIndex = nil
+            }
+        } message: { index in
+            Text(deleteConfirmationMessage(for: index))
+        }
+    }
+
+    private func deleteConfirmationMessage(for index: Int) -> String {
+        guard viewModel.channelPresets.indices.contains(index) else {
+            return "This preset will be removed."
+        }
+        let preset = viewModel.channelPresets[index]
+        let descriptor = preset.name.isEmpty ? preset.url : preset.name
+        if descriptor.isEmpty {
+            return "Preset \(index + 1) will be removed."
+        }
+        return "\(descriptor) will be removed."
+    }
+
+    /// Honors the Confirm Before Deleting preference: prompt when on, delete outright when off.
+    private func requestDelete(at index: Int) {
+        if viewModel.confirmBeforeDelete {
+            pendingDeleteIndex = index
+        } else {
+            viewModel.removeChannelPreset(at: index)
+        }
+    }
+
+    private var presetsContent: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: ScreenMetrics.groupSpacing) {
+                // Matches the button that opens this screen.
+                Text("Manage Stream Presets")
+                    .font(.largeTitle)
+                    .fontWeight(.semibold)
+                    .padding(.bottom, ScreenMetrics.rowSpacing)
+                    .accessibilityAddTraits(.isHeader)
+
+                if viewModel.channelPresetsManaged {
+                    Text("Stream presets are managed by your administrator and cannot be changed here.")
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                }
+
+                if viewModel.channelPresets.isEmpty {
+                    Text("No presets available.")
+                        .foregroundColor(.secondary)
+                } else {
+                    ForEach(Array(viewModel.channelPresets.enumerated()), id: \.offset) { index, preset in
+                        PresetGroup(
+                            index: index,
+                            isSelected: viewModel.selectedPresetIndex == index,
+                            name: nameBinding(for: index),
+                            url: urlBinding(for: index),
+                            managed: viewModel.channelPresetsManaged,
+                            onRemove: { requestDelete(at: index) }
+                        )
                     }
                 }
 
-                if viewModel.channelPresetsManaged {
-                    Text("Stream presets are managed by your administrator.")
-                        .font(.footnote)
-                        .foregroundColor(.secondary)
-                } else {
-                    Button {
-                        viewModel.addChannelPreset()
-                    } label: {
-                        FocusAwareLabel(title: "Add Preset")
-                    }
-                    .disabled(!viewModel.canAddMorePresets)
+                if !viewModel.channelPresetsManaged {
+                    VStack(alignment: .leading, spacing: ScreenMetrics.rowSpacing) {
+                        Button {
+                            viewModel.addChannelPreset()
+                        } label: {
+                            RowLabel(title: "Add Preset")
+                        }
+                        .disabled(!viewModel.canAddMorePresets)
 
-                    if !viewModel.canAddMorePresets {
-                        Text("You can store up to 20 channel presets.")
-                            .font(.footnote)
+                        Text(viewModel.canAddMorePresets
+                             ? "You can store up to \(StreamViewModel.maxChannelPresets) presets."
+                             : "Preset limit reached (\(StreamViewModel.maxChannelPresets)).")
+                            .font(.caption)
                             .foregroundColor(.secondary)
                     }
                 }
 
-                // Done at the bottom rather than a top-toolbar item — remotes travel down.
-                Section {
-                    Button {
-                        dismiss()
-                    } label: {
-                        Text("Done")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
+                Button {
+                    dismiss()
+                } label: {
+                    RowLabel(title: "Done")
                 }
+                .padding(.top, ScreenMetrics.rowSpacing)
             }
-            .formStyle(.grouped)
-            .navigationTitle("Stream Presets")
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, ScreenMetrics.horizontalPadding)
+            .padding(.vertical, ScreenMetrics.verticalPadding)
         }
     }
 
@@ -96,54 +149,62 @@ struct ChannelPresetsView: View {
     }
 }
 
-private struct PresetRow: View {
+/// One preset as a labeled group: a header that names the row, the two editable
+/// fields, and a labeled Delete action. Choosing which preset to play is done on
+/// the main screen, so this screen is purely for editing.
+private struct PresetGroup: View {
     let index: Int
+    let isSelected: Bool
     @Binding var name: String
     @Binding var url: String
     let managed: Bool
     let onRemove: () -> Void
-    let onSelect: () -> Void
-
-    @FocusState private var nameFocused: Bool
-    @FocusState private var urlFocused: Bool
 
     var body: some View {
-        HStack(alignment: .center, spacing: 12) {
-            VStack(alignment: .leading, spacing: 6) {
-                TextField("Name (optional)", text: $name)
-                    .focused($nameFocused)
-                    .foregroundColor(nameFocused ? .black : .primary)
-                    .accessibilityLabel("Preset \(index + 1) name")
-                    .disabled(managed)
-
-                TextField("Preset \(index + 1) URL", text: $url)
-                    .textContentType(.URL)
-                    .autocorrectionDisabled()
-                    .textInputAutocapitalization(.never)
-                    .focused($urlFocused)
-                    .foregroundColor(urlFocused ? .black : .primary)
-                    .accessibilityLabel("Preset \(index + 1) URL")
-                    .disabled(managed)
+        VStack(alignment: .leading, spacing: ScreenMetrics.rowSpacing) {
+            HStack(spacing: 16) {
+                SectionHeader("Preset \(index + 1)")
+                if isSelected {
+                    Text("SELECTED")
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .tracking(1.5)
+                        .foregroundColor(.accentColor)
+                        .accessibilityHidden(true)
+                }
             }
+
+            LabeledTextField(
+                label: "Name",
+                placeholder: "Optional",
+                text: $name,
+                disabled: managed,
+                accessibilityLabelText: "Preset \(index + 1) name"
+            )
+
+            LabeledTextField(
+                label: "URL",
+                placeholder: "https://example.com/stream.m3u8",
+                text: $url,
+                disabled: managed,
+                isURL: true,
+                accessibilityLabelText: "Preset \(index + 1) URL"
+            )
 
             if !managed {
-                Button(role: .destructive) {
+                // Deliberately NOT Button(role: .destructive): tvOS renders that as a
+                // solid red fill, which made deleting the loudest thing on screen.
+                // Red text on the standard card keeps the warning without the shouting.
+                Button {
                     onRemove()
                 } label: {
-                    Image(systemName: "trash")
+                    DestructiveRowLabel(title: "Delete")
                 }
-                .buttonStyle(.borderless)
+                .frame(width: 320)
                 .accessibilityLabel("Delete preset \(index + 1)")
             }
-
-            Button {
-                onSelect()
-            } label: {
-                Image(systemName: "checkmark.circle")
-                    .font(.system(size: 20))
-            }
-            .buttonStyle(.borderless)
-            .accessibilityLabel("Play preset \(index + 1)")
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Preset \(index + 1)")
     }
 }

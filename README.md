@@ -64,13 +64,38 @@ Notes & troubleshooting:
 The app implements a small set of focused features for playing and managing HLS streams:
 
 - Enter an HLS stream URL and click "Play Stream" to start playback.
-- Channel presets: manage up to 20 saved stream URLs, pick one for playback, and optionally lock them down via managed configuration.
+- Channel presets: manage up to 20 saved streams, each with an optional name and a required URL. When a name is set it shows in the Stream Presets list instead of the raw URL. Presets can be locked down via managed configuration.
 - Play-on-open: enable or disable "Play on App Open" so the app will automatically play the last-used URL on launch.
 - Auto-resume: enable and display an "Auto Resume on Network Interrupt" option so the player will attempt to resume playback after transient network interruptions.
-- Retry/timing configuration: customize retry counts and timeout/backoff behavior for resume attempts.
+- Retry timeout: how long to wait before retrying a stalled stream.
 - Managed App Config: all user-facing options are also configurable via MDM/managed app configuration (see `AutoSignDisplay/ManagedAppConfig.example.plist` and `AppConfig.applyConfiguration()`).
 
 These features are intentionally small and testable; they are exercised by the unit tests in `AutoSignDisplayTests` and the small UI tests in `AutoSignDisplayUITests`.
+
+### Retry Timeout and MDM values
+
+The Settings screen presents Retry Timeout as a row that cycles through a fixed
+set of intervals — 3, 5, 10, 15, 30, and 60 seconds — rather than a free-text
+field. Typing digits with the on-screen keyboard is slow on a remote, and this
+value is normally set once by an administrator.
+
+**A value pushed via MDM is always honored, even if it is not one of those six
+intervals.** The list only governs what pressing the row cycles to; it does not
+clamp or validate what `RetryTimeout` may contain:
+
+- `AppConfig` accepts any positive `RetryTimeout` (a `<real>` in the managed
+  plist) and writes it straight through to `UserDefaults`. Non-positive and
+  wrong-typed values are rejected, as before.
+- The Settings row displays whatever the current value is. A managed value of
+  `7` renders as `7s`.
+- Pressing the row advances to the first listed interval **greater than** the
+  current value, so `7s` steps to `10s` rather than snapping backwards to a
+  listed value. Past `60s` it wraps to `3s`.
+- When `SettingsDisabled` is true the row is disabled outright, so a managed
+  value cannot be changed on the device at all.
+
+To offer a different set of intervals, edit `SettingsView.retryTimeoutOptions`.
+That constant affects only the on-device UI — it places no constraint on MDM.
 
 ## Tests and regression protection
 

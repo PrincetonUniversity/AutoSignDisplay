@@ -40,6 +40,7 @@ struct AutoSignDisplayTests {
                 ContentView.channelPresetsManagedKey, "channelPresetsManaged", "ChannelPresetsManaged",
                 ContentView.defaultChannelKey, "defaultChannel", "DefaultChannel",
                 ContentView.selectedPresetIndexKey, "selectedPresetIndex", "SelectedPresetIndex",
+                ContentView.confirmBeforeDeleteKey, "confirmBeforeDelete", "ConfirmBeforeDelete",
                 "com.apple.configuration.managed"
             ]
 
@@ -627,6 +628,142 @@ struct AutoSignDisplayTests {
         #expect(vm.channelPresets[0].name == "Homepage")
         #expect(vm.channelPresets[0].url == "https://a.example.com/1.m3u8")
         vm.stopRetryTimer()
+    }
+
+    // MARK: - Deselecting a Preset
+
+    @Test func deselectPresetClearsSelectionAndURL() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        defaults.set(false, forKey: ContentView.channelPresetsManagedKey)
+        defaults.set(
+            [["Name": "A", "URL": "https://a.example/1.m3u8"],
+             ["Name": "B", "URL": "https://b.example/2.m3u8"]],
+            forKey: ContentView.channelPresetsKey
+        )
+
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        await MainActor.run { vm.selectPreset(at: 1) }
+        #expect(vm.selectedPresetIndex == 1)
+        #expect(vm.streamURL == "https://b.example/2.m3u8")
+
+        await MainActor.run { vm.deselectPreset() }
+        #expect(vm.selectedPresetIndex == nil)
+        #expect(vm.streamURL == "")
+        #expect(defaults.object(forKey: ContentView.selectedPresetIndexKey) == nil)
+        #expect(defaults.object(forKey: ContentView.lastStreamURLKey) == nil)
+        vm.stopRetryTimer()
+    }
+
+    @Test func deselectSurvivesReinitialization() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        defaults.set(false, forKey: ContentView.channelPresetsManagedKey)
+        defaults.set(
+            [["Name": "A", "URL": "https://a.example/1.m3u8"]],
+            forKey: ContentView.channelPresetsKey
+        )
+
+        @MainActor func makeVM() -> StreamViewModel { StreamViewModel(logger: TestLogger()) }
+
+        var vm = await MainActor.run { makeVM() }
+        await MainActor.run { vm.selectPreset(at: 0) }
+        await MainActor.run { vm.deselectPreset() }
+        vm.stopRetryTimer()
+
+        // Regression guard: init() re-derives selectedPresetIndex by matching the
+        // stored URL against the presets, so a deselect that left streamURL intact
+        // would resurrect the selection here.
+        vm = await MainActor.run { makeVM() }
+        #expect(vm.selectedPresetIndex == nil)
+        #expect(vm.streamURL == "")
+        vm.stopRetryTimer()
+    }
+
+    @Test func managedModeCannotDeselect() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        defaults.set(
+            [["Name": "Locked", "URL": "https://admin.example/1.m3u8"]],
+            forKey: ContentView.channelPresetsKey
+        )
+        defaults.set(true, forKey: ContentView.channelPresetsManagedKey)
+        defaults.set(0, forKey: ContentView.selectedPresetIndexKey)
+
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        #expect(vm.selectedPresetIndex == 0)
+
+        await MainActor.run { vm.deselectPreset() }
+        #expect(vm.selectedPresetIndex == 0)
+        #expect(vm.streamURL == "https://admin.example/1.m3u8")
+        vm.stopRetryTimer()
+    }
+
+    // MARK: - Confirm Before Deleting
+
+    @Test func confirmBeforeDeleteDefaultsToOn() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        // Key absent entirely — must come up ON, not false-by-omission.
+        #expect(defaults.object(forKey: ContentView.confirmBeforeDeleteKey) == nil)
+
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        #expect(vm.confirmBeforeDelete == true)
+        // init() should have seeded the key so the default survives a relaunch.
+        #expect(defaults.bool(forKey: ContentView.confirmBeforeDeleteKey) == true)
+        vm.stopRetryTimer()
+    }
+
+    @Test func confirmBeforeDeleteRespectsStoredOff() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        defaults.set(false, forKey: ContentView.confirmBeforeDeleteKey)
+
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        #expect(vm.confirmBeforeDelete == false)
+        vm.stopRetryTimer()
+    }
+
+    @Test func confirmBeforeDeleteUpdatePersists() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        @MainActor func makeVM() -> StreamViewModel { StreamViewModel(logger: TestLogger()) }
+
+        var vm = await MainActor.run { makeVM() }
+        #expect(vm.confirmBeforeDelete == true)
+
+        await MainActor.run { vm.updateConfirmBeforeDelete(false) }
+        #expect(vm.confirmBeforeDelete == false)
+        #expect(defaults.bool(forKey: ContentView.confirmBeforeDeleteKey) == false)
+
+        // Survives a re-init.
+        vm.stopRetryTimer()
+        vm = await MainActor.run { makeVM() }
+        #expect(vm.confirmBeforeDelete == false)
+        vm.stopRetryTimer()
+    }
+
+    @Test func managedConfigRemovalLeavesConfirmBeforeDeleteAlone() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        // User turned confirmation off, then a managed payload arrives and later departs.
+        defaults.set(false, forKey: ContentView.confirmBeforeDeleteKey)
+        await MainActor.run {
+            defaults.set(
+                [AppConfigKeys.channelPresets: [["Name": "A", "URL": "https://a.example/1.m3u8"]]],
+                forKey: "com.apple.configuration.managed"
+            )
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        await MainActor.run {
+            defaults.removeObject(forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+
+        // It is not an MDM-settable key, so the managed→unmanaged reset must not touch it.
+        #expect(defaults.bool(forKey: ContentView.confirmBeforeDeleteKey) == false)
     }
 
     @Test func managedModeIgnoresNameEditAttempts() async throws {

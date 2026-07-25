@@ -8,6 +8,60 @@
 import SwiftUI
 import AVKit
 
+/// Group label above a block of controls. tvOS convention is a small,
+/// uppercased, letter-spaced caption in a secondary color — it reads as a
+/// divider rather than competing with the content beneath it.
+struct SectionHeader: View {
+    private let title: String
+
+    init(_ title: String) {
+        self.title = title
+    }
+
+    var body: some View {
+        Text(title.uppercased())
+            .font(.caption)
+            .fontWeight(.semibold)
+            .tracking(1.5)
+            .foregroundColor(.secondary)
+            .accessibilityAddTraits(.isHeader)
+    }
+}
+
+/// A preset row on the main screen: name (or URL) on the left, and a "Selected"
+/// marker on the right when it's the active preset. Colors are explicit rather
+/// than inherited so the accent tint doesn't leak into the row's text.
+private struct PresetListRow: View {
+    let title: String
+    let isSelected: Bool
+    @Environment(\.isFocused) private var isFocused
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .foregroundColor(isFocused ? .black : .primary)
+
+            if isSelected {
+                Spacer()
+                Text("Selected")
+                    .font(.caption)
+                    .foregroundColor(isFocused ? .black.opacity(0.65) : .secondary)
+                    .accessibilityHidden(true)
+                Image(systemName: "checkmark.circle.fill")
+                    // Focused rows get a near-white background, so the accent blue
+                    // needs to darken to stay legible against it.
+                    .foregroundColor(isFocused
+                                     ? Color(red: 0.10, green: 0.40, blue: 0.62)
+                                     : .accentColor)
+                    .accessibilityHidden(true)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+
 struct FullscreenPlayerView: UIViewControllerRepresentable {
     let player: AVPlayer
 
@@ -44,6 +98,10 @@ struct ContentView: View {
     static let defaultChannelKey = "defaultChannel"
     static let channelPresetsManagedKey = "channelPresetsManaged"
     static let selectedPresetIndexKey = "selectedPresetIndex"
+    // Intentionally has no AppConfigKeys counterpart: presets are read-only when
+    // MDM-managed, so there is nothing to confirm deleting and nothing for an
+    // administrator to configure. Purely a local preference.
+    static let confirmBeforeDeleteKey = "confirmBeforeDelete"
 
     @StateObject private var viewModel = StreamViewModel()
     @State private var activeSheet: SheetDestination?
@@ -65,8 +123,7 @@ struct ContentView: View {
                     }
 
                     VStack(alignment: .leading, spacing: 12) {
-                        Text("Selected Stream")
-                            .font(.headline)
+                        SectionHeader("Selected Stream")
 
                         TextField(
                             "Enter HLS Stream URL",
@@ -86,47 +143,30 @@ struct ContentView: View {
                                 showPlayer = true
                             }
                         } label: {
-                            Text("Play Stream")
-                                .frame(maxWidth: .infinity)
+                            CenteredRowLabel(title: "Play Stream")
                         }
                         .buttonStyle(.borderedProminent)
                         .disabled(viewModel.streamURL.isEmpty)
-
-                        Text("Enter a URL to play an HLS stream.")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
                     }
 
                     if !viewModel.channelPresets.isEmpty {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("Stream Presets")
-                                .font(.headline)
+                            SectionHeader("Stream Presets")
 
                             LazyVStack(alignment: .leading, spacing: 12) {
                                 ForEach(Array(viewModel.channelPresets.enumerated()), id: \.offset) { index, preset in
                                     Button {
-                                        viewModel.selectPreset(at: index)
-                                        AccessibilityNotification.Announcement("Selected preset \(index + 1)").post()
+                                        togglePreset(at: index)
                                     } label: {
-                                        HStack {
-                                            Text(presetDisplayText(preset, index: index))
-                                                .lineLimit(1)
-                                                .truncationMode(.middle)
-                                            if viewModel.selectedPresetIndex == index {
-                                                Spacer()
-                                                Text("Selected")
-                                                    .font(.caption)
-                                                    .accessibilityHidden(true)
-                                                Image(systemName: "checkmark.circle.fill")
-                                                    .foregroundColor(.accentColor)
-                                                    .accessibilityHidden(true)
-                                            }
-                                        }
-                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                        PresetListRow(
+                                            title: presetDisplayText(preset, index: index),
+                                            isSelected: viewModel.selectedPresetIndex == index
+                                        )
                                     }
                                     .buttonStyle(.borderedProminent)
                                     .accessibilityLabel(presetAccessibilityLabel(index: index, preset: preset))
                                     .accessibilityAddTraits(viewModel.selectedPresetIndex == index ? .isSelected : [])
+                                    .accessibilityHint(presetActionHint(index: index))
                                 }
                             }
 
@@ -142,8 +182,7 @@ struct ContentView: View {
                         Button {
                             activeSheet = .presets
                         } label: {
-                            Text("Manage Stream Presets")
-                                .frame(maxWidth: .infinity)
+                            CenteredRowLabel(title: "Manage Stream Presets")
                         }
                         .buttonStyle(.bordered)
                         .disabled(viewModel.channelPresetsManaged)
@@ -152,8 +191,7 @@ struct ContentView: View {
                         Button {
                             activeSheet = .settings
                         } label: {
-                            Text("Settings")
-                                .frame(maxWidth: .infinity)
+                            CenteredRowLabel(title: "Settings")
                         }
                         .buttonStyle(.bordered)
                         .disabled(viewModel.settingsDisabled)
@@ -165,7 +203,10 @@ struct ContentView: View {
                 .padding(.vertical, 36)
             }
             .navigationTitle("AutoSignDisplay")
-            .sheet(item: $activeSheet) { destination in
+            // Full screen rather than .sheet: tvOS renders a sheet as a narrow
+            // centered card, which truncated stream URLs and wasted most of the
+            // display. These are management screens, so they get the whole screen.
+            .fullScreenCover(item: $activeSheet) { destination in
                 switch destination {
                 case .settings:
                     SettingsView(
@@ -173,6 +214,8 @@ struct ContentView: View {
                         retryTimeout: $viewModel.retryTimeout,
                         autoResume: $viewModel.autoResume,
                         settingsDisabled: $viewModel.settingsDisabled,
+                        confirmBeforeDelete: $viewModel.confirmBeforeDelete,
+                        channelPresetsManaged: viewModel.channelPresetsManaged,
                         onRetryTimeoutChanged: {
                             viewModel.updateSettings(
                                 isPlayingOnOpen: viewModel.isPlayingOnOpen,
@@ -180,6 +223,9 @@ struct ContentView: View {
                                 autoResume: viewModel.autoResume,
                                 settingsDisabled: viewModel.settingsDisabled
                             )
+                        },
+                        onConfirmBeforeDeleteChanged: { newValue in
+                            viewModel.updateConfirmBeforeDelete(newValue)
                         }
                     )
                 case .presets:
@@ -218,6 +264,26 @@ struct ContentView: View {
 }
 
 private extension ContentView {
+    /// Tapping a preset selects it; tapping the one already selected clears the
+    /// selection. Deselect is unavailable under MDM, where the administrator's
+    /// channel is meant to keep playing.
+    func togglePreset(at index: Int) {
+        if viewModel.selectedPresetIndex == index, !viewModel.channelPresetsManaged {
+            viewModel.deselectPreset()
+            AccessibilityNotification.Announcement("Deselected preset \(index + 1)").post()
+        } else {
+            viewModel.selectPreset(at: index)
+            AccessibilityNotification.Announcement("Selected preset \(index + 1)").post()
+        }
+    }
+
+    /// Tells VoiceOver what pressing the row will do, since the same control both
+    /// selects and deselects.
+    func presetActionHint(index: Int) -> String {
+        guard viewModel.selectedPresetIndex == index else { return "Selects this stream" }
+        return viewModel.channelPresetsManaged ? "" : "Clears this selection"
+    }
+
     /// What renders in the main preset list row. Prefer the admin- or user-supplied
     /// name; fall back to the URL; fall back to "Preset N" for a totally-empty row
     /// (only possible transiently when a user has just tapped Add Preset).

@@ -766,6 +766,31 @@ struct AutoSignDisplayTests {
         #expect(defaults.bool(forKey: ContentView.confirmBeforeDeleteKey) == false)
     }
 
+    @Test func urlEditPersistsAndRoundTrips() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        defaults.set(false, forKey: ContentView.channelPresetsManagedKey)
+        defaults.set(
+            [["Name": "Lobby", "URL": "https://a.example.com/old.m3u8"]],
+            forKey: ContentView.channelPresetsKey
+        )
+
+        @MainActor func makeVM() -> StreamViewModel { StreamViewModel(logger: TestLogger()) }
+
+        var vm = await MainActor.run { makeVM() }
+        await MainActor.run { vm.updateChannelPreset(at: 0, url: "https://a.example.com/new.m3u8") }
+        #expect(vm.channelPresets[0].url == "https://a.example.com/new.m3u8")
+
+        // The name must survive a URL edit, and vice versa.
+        #expect(vm.channelPresets[0].name == "Lobby")
+
+        vm.stopRetryTimer()
+        vm = await MainActor.run { makeVM() }
+        #expect(vm.channelPresets[0].url == "https://a.example.com/new.m3u8")
+        #expect(vm.channelPresets[0].name == "Lobby")
+        vm.stopRetryTimer()
+    }
+
     @Test func managedModeIgnoresNameEditAttempts() async throws {
         await resetDefaults()
         let defaults = UserDefaults.standard

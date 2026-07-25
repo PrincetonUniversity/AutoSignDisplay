@@ -77,18 +77,6 @@ struct FullscreenPlayerView: UIViewControllerRepresentable {
 }
 
 struct ContentView: View {
-    private enum SheetDestination: Identifiable {
-        case settings
-        case presets
-
-        var id: Int {
-            switch self {
-            case .settings: return 0
-            case .presets: return 1
-            }
-        }
-    }
-
     static let playOnOpenKey = "playOnAppOpen"
     static let retryTimeoutKey = "retryTimeout"
     static let lastStreamURLKey = "lastStreamURL"
@@ -104,7 +92,6 @@ struct ContentView: View {
     static let confirmBeforeDeleteKey = "confirmBeforeDelete"
 
     @StateObject private var viewModel = StreamViewModel()
-    @State private var activeSheet: SheetDestination?
     @State private var showPlayer = false
     @State private var presentationFailed = false
     @Environment(\.scenePhase) private var scenePhase
@@ -112,7 +99,7 @@ struct ContentView: View {
     var body: some View {
         NavigationView {
             ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
+                VStack(alignment: .leading, spacing: ScreenMetrics.groupSpacing) {
                     // Simple banner shown when presentation fails and a retry was scheduled
                     if presentationFailed {
                         Text("Failed to present player — retrying...")
@@ -122,7 +109,7 @@ struct ContentView: View {
                             .cornerRadius(6)
                     }
 
-                    VStack(alignment: .leading, spacing: 12) {
+                    VStack(alignment: .leading, spacing: ScreenMetrics.rowSpacing) {
                         SectionHeader("Selected Stream")
 
                         TextField(
@@ -150,10 +137,10 @@ struct ContentView: View {
                     }
 
                     if !viewModel.channelPresets.isEmpty {
-                        VStack(alignment: .leading, spacing: 12) {
+                        VStack(alignment: .leading, spacing: ScreenMetrics.rowSpacing) {
                             SectionHeader("Stream Presets")
 
-                            LazyVStack(alignment: .leading, spacing: 12) {
+                            LazyVStack(alignment: .leading, spacing: ScreenMetrics.rowSpacing) {
                                 ForEach(Array(viewModel.channelPresets.enumerated()), id: \.offset) { index, preset in
                                     Button {
                                         togglePreset(at: index)
@@ -178,9 +165,14 @@ struct ContentView: View {
                         }
                     }
 
-                    HStack(spacing: 16) {
-                        Button {
-                            activeSheet = .presets
+                    // Pushed, not presented. A text field inside a .sheet or
+                    // .fullScreenCover on tvOS does not get its editing presentation
+                    // torn down when the user cancels out of the keyboard — the field
+                    // is left stuck white with compact text. Fields reached by a
+                    // navigation push behave correctly, like the URL field above.
+                    HStack(spacing: ScreenMetrics.buttonSpacing) {
+                        NavigationLink {
+                            ChannelPresetsView(viewModel: viewModel)
                         } label: {
                             CenteredRowLabel(title: "Manage Stream Presets")
                         }
@@ -188,8 +180,26 @@ struct ContentView: View {
                         .disabled(viewModel.channelPresetsManaged)
                         .accessibilityHint(viewModel.channelPresetsManaged ? "Managed by your administrator" : "")
 
-                        Button {
-                            activeSheet = .settings
+                        NavigationLink {
+                            SettingsView(
+                                isPlayingOnOpen: $viewModel.isPlayingOnOpen,
+                                retryTimeout: $viewModel.retryTimeout,
+                                autoResume: $viewModel.autoResume,
+                                settingsDisabled: $viewModel.settingsDisabled,
+                                confirmBeforeDelete: $viewModel.confirmBeforeDelete,
+                                channelPresetsManaged: viewModel.channelPresetsManaged,
+                                onRetryTimeoutChanged: {
+                                    viewModel.updateSettings(
+                                        isPlayingOnOpen: viewModel.isPlayingOnOpen,
+                                        retryTimeout: viewModel.retryTimeout,
+                                        autoResume: viewModel.autoResume,
+                                        settingsDisabled: viewModel.settingsDisabled
+                                    )
+                                },
+                                onConfirmBeforeDeleteChanged: { newValue in
+                                    viewModel.updateConfirmBeforeDelete(newValue)
+                                }
+                            )
                         } label: {
                             CenteredRowLabel(title: "Settings")
                         }
@@ -199,39 +209,10 @@ struct ContentView: View {
                     }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 48)
-                .padding(.vertical, 36)
+                .padding(.horizontal, ScreenMetrics.horizontalPadding)
+                .padding(.vertical, ScreenMetrics.verticalPadding)
             }
             .navigationTitle("AutoSignDisplay")
-            // Full screen rather than .sheet: tvOS renders a sheet as a narrow
-            // centered card, which truncated stream URLs and wasted most of the
-            // display. These are management screens, so they get the whole screen.
-            .fullScreenCover(item: $activeSheet) { destination in
-                switch destination {
-                case .settings:
-                    SettingsView(
-                        isPlayingOnOpen: $viewModel.isPlayingOnOpen,
-                        retryTimeout: $viewModel.retryTimeout,
-                        autoResume: $viewModel.autoResume,
-                        settingsDisabled: $viewModel.settingsDisabled,
-                        confirmBeforeDelete: $viewModel.confirmBeforeDelete,
-                        channelPresetsManaged: viewModel.channelPresetsManaged,
-                        onRetryTimeoutChanged: {
-                            viewModel.updateSettings(
-                                isPlayingOnOpen: viewModel.isPlayingOnOpen,
-                                retryTimeout: viewModel.retryTimeout,
-                                autoResume: viewModel.autoResume,
-                                settingsDisabled: viewModel.settingsDisabled
-                            )
-                        },
-                        onConfirmBeforeDeleteChanged: { newValue in
-                            viewModel.updateConfirmBeforeDelete(newValue)
-                        }
-                    )
-                case .presets:
-                    ChannelPresetsView(viewModel: viewModel)
-                }
-            }
             .onAppear {
                 viewModel.startStreamIfNeeded()
                 scheduleAutoPlayPresentation()

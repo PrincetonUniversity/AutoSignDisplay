@@ -9,7 +9,6 @@ import SwiftUI
 
 struct ChannelPresetsView: View {
     @ObservedObject var viewModel: StreamViewModel
-    @Environment(\.dismiss) private var dismiss
 
     /// Index awaiting delete confirmation. Non-nil drives the confirmation alert.
     @State private var pendingDeleteIndex: Int?
@@ -17,7 +16,7 @@ struct ChannelPresetsView: View {
     var body: some View {
         ZStack {
             ModalBackground()
-            presetsContent
+            presetsList
         }
         .alert(
             "Delete Preset?",
@@ -39,6 +38,111 @@ struct ChannelPresetsView: View {
         }
     }
 
+    // MARK: - List
+
+    private var presetsList: some View {
+        ScrollViewReader { proxy in
+            presetsScrollView(proxy: proxy)
+        }
+    }
+
+    private func presetsScrollView(proxy: ScrollViewProxy) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: ScreenMetrics.groupSpacing) {
+                // Matches the button that opens this screen.
+                Text("Manage Stream Presets")
+                    .font(.largeTitle)
+                    .fontWeight(.semibold)
+                    .padding(.bottom, ScreenMetrics.titleSpacing)
+                    .accessibilityAddTraits(.isHeader)
+
+                if viewModel.channelPresetsManaged {
+                    Text("Stream presets are managed by your administrator and cannot be changed here.")
+                        .font(.callout)
+                        .foregroundColor(.secondary)
+                }
+
+                // Add sits above the list, not below it. tvOS focus travel is
+                // directional, so an action stranded under 20 presets takes a long
+                // swipe to reach; here it is one press away when the screen opens.
+                if !viewModel.channelPresetsManaged {
+                    VStack(alignment: .leading, spacing: ScreenMetrics.rowSpacing) {
+                        Button {
+                            viewModel.addChannelPreset()
+                            // The new row is appended, so bring it into view —
+                            // otherwise pressing Add appears to do nothing.
+                            if let newIndex = viewModel.channelPresets.indices.last {
+                                withAnimation {
+                                    proxy.scrollTo(newIndex, anchor: .center)
+                                }
+                                AccessibilityNotification.Announcement(
+                                    "Added preset \(newIndex + 1)"
+                                ).post()
+                            }
+                        } label: {
+                            RowLabel(title: "Add Preset")
+                        }
+                        .disabled(!viewModel.canAddMorePresets)
+                        .accessibilityLabel("Add a Preset")
+
+                        Text(viewModel.canAddMorePresets
+                             ? "You can store up to \(StreamViewModel.maxChannelPresets) presets."
+                             : "Preset limit reached (\(StreamViewModel.maxChannelPresets)).")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                if viewModel.channelPresets.isEmpty {
+                    Text("No presets available.")
+                        .foregroundColor(.secondary)
+                } else {
+                    ForEach(Array(viewModel.channelPresets.enumerated()), id: \.offset) { index, preset in
+                        PresetGroup(
+                            index: index,
+                            isSelected: viewModel.selectedPresetIndex == index,
+                            preset: preset,
+                            managed: viewModel.channelPresetsManaged,
+                            name: nameBinding(for: index),
+                            url: urlBinding(for: index),
+                            onRemove: { requestDelete(at: index) }
+                        )
+                        .id(index)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, ScreenMetrics.horizontalPadding)
+            .padding(.vertical, ScreenMetrics.verticalPadding)
+        }
+    }
+
+    // MARK: - Bindings
+
+    private func nameBinding(for index: Int) -> Binding<String> {
+        Binding(
+            get: {
+                viewModel.channelPresets.indices.contains(index)
+                    ? viewModel.channelPresets[index].name
+                    : ""
+            },
+            set: { viewModel.updateChannelPresetName(at: index, name: $0) }
+        )
+    }
+
+    private func urlBinding(for index: Int) -> Binding<String> {
+        Binding(
+            get: {
+                viewModel.channelPresets.indices.contains(index)
+                    ? viewModel.channelPresets[index].url
+                    : ""
+            },
+            set: { viewModel.updateChannelPreset(at: index, url: $0) }
+        )
+    }
+
+    // MARK: - Delete
+
     private func deleteConfirmationMessage(for index: Int) -> String {
         guard viewModel.channelPresets.indices.contains(index) else {
             return "This preset will be removed."
@@ -59,110 +163,26 @@ struct ChannelPresetsView: View {
             viewModel.removeChannelPreset(at: index)
         }
     }
-
-    private var presetsContent: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: ScreenMetrics.groupSpacing) {
-                // Matches the button that opens this screen.
-                Text("Manage Stream Presets")
-                    .font(.largeTitle)
-                    .fontWeight(.semibold)
-                    .padding(.bottom, ScreenMetrics.rowSpacing)
-                    .accessibilityAddTraits(.isHeader)
-
-                if viewModel.channelPresetsManaged {
-                    Text("Stream presets are managed by your administrator and cannot be changed here.")
-                        .font(.callout)
-                        .foregroundColor(.secondary)
-                }
-
-                if viewModel.channelPresets.isEmpty {
-                    Text("No presets available.")
-                        .foregroundColor(.secondary)
-                } else {
-                    ForEach(Array(viewModel.channelPresets.enumerated()), id: \.offset) { index, preset in
-                        PresetGroup(
-                            index: index,
-                            isSelected: viewModel.selectedPresetIndex == index,
-                            name: nameBinding(for: index),
-                            url: urlBinding(for: index),
-                            managed: viewModel.channelPresetsManaged,
-                            onRemove: { requestDelete(at: index) }
-                        )
-                    }
-                }
-
-                if !viewModel.channelPresetsManaged {
-                    VStack(alignment: .leading, spacing: ScreenMetrics.rowSpacing) {
-                        Button {
-                            viewModel.addChannelPreset()
-                        } label: {
-                            RowLabel(title: "Add Preset")
-                        }
-                        .disabled(!viewModel.canAddMorePresets)
-
-                        Text(viewModel.canAddMorePresets
-                             ? "You can store up to \(StreamViewModel.maxChannelPresets) presets."
-                             : "Preset limit reached (\(StreamViewModel.maxChannelPresets)).")
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                Button {
-                    dismiss()
-                } label: {
-                    RowLabel(title: "Done")
-                }
-                .padding(.top, ScreenMetrics.rowSpacing)
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.horizontal, ScreenMetrics.horizontalPadding)
-            .padding(.vertical, ScreenMetrics.verticalPadding)
-        }
-    }
-
-    private func nameBinding(for index: Int) -> Binding<String> {
-        Binding(
-            get: {
-                viewModel.channelPresets.indices.contains(index)
-                    ? viewModel.channelPresets[index].name
-                    : ""
-            },
-            set: { newValue in
-                viewModel.updateChannelPresetName(at: index, name: newValue)
-            }
-        )
-    }
-
-    private func urlBinding(for index: Int) -> Binding<String> {
-        Binding(
-            get: {
-                viewModel.channelPresets.indices.contains(index)
-                    ? viewModel.channelPresets[index].url
-                    : ""
-            },
-            set: { newValue in
-                viewModel.updateChannelPreset(at: index, url: newValue)
-            }
-        )
-    }
 }
 
-/// One preset as a labeled group: a header that names the row, the two editable
-/// fields, and a labeled Delete action. Choosing which preset to play is done on
-/// the main screen, so this screen is purely for editing.
+/// One preset: a header, two rows that push an editor, and a labeled Delete.
+///
+/// The rows show values but are not text fields. tvOS leaves a text field stuck
+/// in its compact editing presentation when the user cancels out of the keyboard,
+/// and a stack of them in a list has nothing to force the re-render that would
+/// clear it. Editing happens one field at a time on a pushed screen.
 private struct PresetGroup: View {
     let index: Int
     let isSelected: Bool
+    let preset: ChannelPreset
+    let managed: Bool
     @Binding var name: String
     @Binding var url: String
-    let managed: Bool
     let onRemove: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: ScreenMetrics.rowSpacing) {
-            HStack(spacing: 16) {
+        VStack(alignment: .leading, spacing: ScreenMetrics.fieldSpacing) {
+            HStack(spacing: ScreenMetrics.buttonSpacing) {
                 SectionHeader("Preset \(index + 1)")
                 if isSelected {
                     Text("SELECTED")
@@ -195,13 +215,14 @@ private struct PresetGroup: View {
                 // Deliberately NOT Button(role: .destructive): tvOS renders that as a
                 // solid red fill, which made deleting the loudest thing on screen.
                 // Red text on the standard card keeps the warning without the shouting.
-                Button {
-                    onRemove()
-                } label: {
-                    DestructiveRowLabel(title: "Delete")
+                Button(action: onRemove) {
+                    // Names the target so a row of identical "Delete" buttons can't
+                    // be confused for one another. Self-describing, so no separate
+                    // accessibilityLabel is needed — VoiceOver reads this text.
+                    DestructiveRowLabel(title: "Delete Preset \(index + 1)")
                 }
-                .frame(width: 320)
-                .accessibilityLabel("Delete preset \(index + 1)")
+                .frame(width: 420)
+                .padding(.top, ScreenMetrics.fieldSpacing)
             }
         }
         .accessibilityElement(children: .contain)

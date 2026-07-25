@@ -7,32 +7,28 @@
 
 import SwiftUI
 
-/// Text that flips foreground color to `.black` when the enclosing focusable control
-/// is focused. Needed on tvOS: focused Form rows / Toggle & Button labels get a light
-/// background, and the default `.primary` (white in dark mode) disappears on it.
-/// Pass `fieldFocused: true` when the ambient `\.isFocused` doesn't cover the case
-/// (e.g. a TextField whose label lives in a sibling view).
-struct FocusAwareLabel: View {
-    let title: String
-    var fieldFocused: Bool = false
-    @Environment(\.isFocused) private var isFocused
-
-    var body: some View {
-        Text(title)
-            .foregroundColor((isFocused || fieldFocused) ? .black : .primary)
-    }
-}
-
-/// Shared metrics so the modal screens line up with the main screen.
+/// Shared layout scale. Every screen — main and modal — reads from this so the
+/// three don't drift apart.
 enum ScreenMetrics {
     static let horizontalPadding: CGFloat = 48
     static let verticalPadding: CGFloat = 36
+    /// Between sibling rows inside one group.
     static let rowSpacing: CGFloat = 12
-    static let groupSpacing: CGFloat = 32
+    /// Between labeled groups.
+    static let groupSpacing: CGFloat = 24
+    /// Between fields that belong to the same record (e.g. a preset's Name and
+    /// URL). Slightly tighter than `rowSpacing` so a preset reads as one unit —
+    /// but not below ~12pt: a focused tvOS control scales up and casts a shadow,
+    /// and at 6pt that halo bled onto the neighbouring field, lighting up both.
+    static let fieldSpacing: CGFloat = 12
+    /// Between side-by-side buttons.
+    static let buttonSpacing: CGFloat = 16
+    /// Gap under a screen title.
+    static let titleSpacing: CGFloat = 12
 }
 
-/// Opaque backdrop for a full-screen modal. `fullScreenCover` does not supply a
-/// background of its own, so without this the presenting screen shows through.
+/// Opaque backdrop for a full-screen secondary screen, so nothing behind it can
+/// show through.
 struct ModalBackground: View {
     var body: some View {
         Color(white: 0.09)
@@ -137,19 +133,6 @@ struct CenteredRowLabel: View {
     }
 }
 
-/// Row label for a confirming/dismissing action. Accent-tinted so it reads as an
-/// action rather than another setting row sharing the same card treatment.
-struct AccentRowLabel: View {
-    let title: String
-    @Environment(\.isFocused) private var isFocused
-
-    var body: some View {
-        Text(title)
-            .foregroundColor(isFocused ? .black : .accentColor)
-            .frame(maxWidth: .infinity, alignment: .leading)
-    }
-}
-
 /// Row label for a destructive action. Red text on the standard focusable card
 /// rather than a red fill, so the warning reads without dominating the screen.
 /// Inverts to a darker red when focused, since the focused card is near-white.
@@ -166,9 +149,13 @@ struct DestructiveRowLabel: View {
     }
 }
 
-/// "Label on the left, text field on the right." The label lives outside the
-/// focusable TextField, so focus has to be threaded in explicitly rather than
-/// read from the environment.
+/// "Label on the left, editable text field on the right."
+///
+/// Deliberately plain — no `@FocusState`, no `.focused()`, no foreground color,
+/// no `Group` wrapper. That matches the main screen's stream URL field, which
+/// renders correctly. Text fields only misbehaved here while this screen was
+/// presented as a modal; reached by a navigation push, tvOS tears their editing
+/// presentation down properly on its own.
 struct LabeledTextField: View {
     let label: String
     let placeholder: String
@@ -176,31 +163,26 @@ struct LabeledTextField: View {
     var disabled: Bool = false
     var isURL: Bool = false
     var accessibilityLabelText: String
-    var onChange: ((String) -> Void)?
-
-    @FocusState private var focused: Bool
 
     var body: some View {
         HStack(spacing: 24) {
             Text(label)
                 .foregroundColor(.secondary)
-                .frame(width: 160, alignment: .leading)
+                .frame(width: 120, alignment: .leading)
                 .accessibilityHidden(true)
 
-            Group {
-                if isURL {
-                    TextField(placeholder, text: $text)
-                        .textContentType(.URL)
-                        .autocorrectionDisabled()
-                        .textInputAutocapitalization(.never)
-                } else {
-                    TextField(placeholder, text: $text)
-                }
+            if isURL {
+                TextField(placeholder, text: $text)
+                    .textContentType(.URL)
+                    .autocorrectionDisabled()
+                    .textInputAutocapitalization(.never)
+                    .accessibilityLabel(accessibilityLabelText)
+                    .disabled(disabled)
+            } else {
+                TextField(placeholder, text: $text)
+                    .accessibilityLabel(accessibilityLabelText)
+                    .disabled(disabled)
             }
-            .focused($focused)
-            .foregroundColor(focused ? .black : .primary)
-            .accessibilityLabel(accessibilityLabelText)
-            .disabled(disabled)
         }
     }
 }
@@ -210,7 +192,6 @@ struct SettingsView: View {
     /// still honored and displayed — the list only governs what pressing the row cycles to.
     static let retryTimeoutOptions: [Double] = [3, 5, 10, 15, 30, 60]
 
-    @Environment(\.dismiss) private var dismiss
     @Binding var isPlayingOnOpen: Bool
     @Binding var retryTimeout: Double
     @Binding var autoResume: Bool
@@ -235,7 +216,7 @@ struct SettingsView: View {
                 Text("Settings")
                     .font(.largeTitle)
                     .fontWeight(.semibold)
-                    .padding(.bottom, ScreenMetrics.rowSpacing)
+                    .padding(.bottom, ScreenMetrics.titleSpacing)
                     .accessibilityAddTraits(.isHeader)
 
                 VStack(alignment: .leading, spacing: ScreenMetrics.rowSpacing) {
@@ -298,15 +279,10 @@ struct SettingsView: View {
                     }
                 }
 
-                // Done sits at the bottom: on tvOS a top-toolbar Done forces users to
-                // page focus back up past every control to dismiss. Accent-tinted so it
-                // reads as an action rather than another setting row.
-                Button {
-                    dismiss()
-                } label: {
-                    AccentRowLabel(title: "Done")
-                }
-                .padding(.top, ScreenMetrics.groupSpacing)
+                // No Done button: the Menu button dismisses, which is the tvOS
+                // convention, and every setting here persists the moment it changes —
+                // so an on-screen Done would only duplicate Menu while adding a
+                // focusable element below the content.
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, ScreenMetrics.horizontalPadding)

@@ -8,6 +8,15 @@
     <key>DisplayTitle</key>
     <string>Engineering Quad — Lobby</string>
 
+    <!-- Boolean: reduce the main screen to the preset list only -->
+    <key>ViewOnlyMode</key>
+    <false/>
+
+    <!-- String: require this PIN to open Settings. A deterrent, not security:
+         stored in preferences, not the keychain. -->
+    <key>SettingsPIN</key>
+    <string>4821</string>
+
     <!-- Boolean: play the configured stream when the app opens -->
     <key>PlayOnAppOpen</key>
     <true/>

@@ -15,6 +15,8 @@ struct AppConfigKeys {
     static let channelPresets = "ChannelPresets"
     static let defaultChannel = "DefaultChannel"
     static let displayTitle = "DisplayTitle"
+    static let viewOnlyMode = "ViewOnlyMode"
+    static let settingsPIN = "SettingsPIN"
 }
 
 class AppConfig {
@@ -22,8 +24,10 @@ class AppConfig {
     static func applyConfiguration(logger: Logger = PrintLogger()) {
         let defaults = UserDefaults.standard
         let previouslyManaged = defaults.bool(forKey: ContentView.channelPresetsManagedKey)
+            || defaults.bool(forKey: ContentView.settingsPINManagedKey)
 
         defaults.set(false, forKey: ContentView.channelPresetsManagedKey)
+        defaults.set(false, forKey: ContentView.settingsPINManagedKey)
 
         guard let managedConfig = defaults.dictionary(forKey: "com.apple.configuration.managed") else {
             if previouslyManaged {
@@ -40,6 +44,11 @@ class AppConfig {
                 defaults.removeObject(forKey: ContentView.settingsDisabledKey)
                 defaults.removeObject(forKey: ContentView.retryTimeoutKey)
                 defaults.removeObject(forKey: ContentView.displayTitleKey)
+                defaults.removeObject(forKey: ContentView.viewOnlyModeKey)
+                // An administrator's PIN must not outlive the payload that set it,
+                // or removing the configuration would leave Settings locked behind a
+                // PIN nobody on site knows.
+                defaults.removeObject(forKey: ContentView.settingsPINKey)
                 logger.log("Cleared managed settings after configuration removal.")
             } else {
                 logger.log("No managed configuration found.")
@@ -204,6 +213,43 @@ class AppConfig {
             }
         } else if managedConfig[AppConfigKeys.streamURL] != nil {
             logger.log("Ignored invalid StreamURL (must be non-empty String)")
+        }
+
+        // Validate and apply ViewOnlyMode (must be Boolean).
+        // NSNumber is checked FIRST and its objCType inspected: an NSNumber holding
+        // an integer casts cleanly to Bool in Swift, so <integer>1</integer> would
+        // be silently accepted as true without this. Only CFBoolean ("c") is valid.
+        if let viewOnlyValue = managedConfig[AppConfigKeys.viewOnlyMode] {
+            if let numValue = viewOnlyValue as? NSNumber {
+                let objCTypeStr = String(cString: numValue.objCType)
+                if objCTypeStr == "c" {
+                    defaults.set(numValue.boolValue, forKey: ContentView.viewOnlyModeKey)
+                    logger.log("Applied managed ViewOnlyMode (CFBoolean): \(numValue.boolValue)")
+                } else {
+                    logger.log("Ignored invalid ViewOnlyMode (NSNumber with objCType '\(objCTypeStr)', must be Boolean)")
+                }
+            } else if let boolValue = viewOnlyValue as? Bool {
+                defaults.set(boolValue, forKey: ContentView.viewOnlyModeKey)
+                logger.log("Applied managed ViewOnlyMode: \(boolValue)")
+            } else {
+                logger.log("Ignored invalid ViewOnlyMode (must be Boolean, got \(type(of: viewOnlyValue)))")
+            }
+        }
+
+        // Validate and apply SettingsPIN (must be non-empty String).
+        // Setting it also raises settingsPINManaged, which locks the on-device PIN
+        // field: an administrator's PIN must not be changeable from the couch.
+        if let pinValue = managedConfig[AppConfigKeys.settingsPIN] as? String {
+            let trimmed = pinValue.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty {
+                logger.log("Rejected SettingsPIN: must not be empty")
+            } else {
+                defaults.set(trimmed, forKey: ContentView.settingsPINKey)
+                defaults.set(true, forKey: ContentView.settingsPINManagedKey)
+                logger.log("Applied managed SettingsPIN (\(trimmed.count) characters)")
+            }
+        } else if managedConfig[AppConfigKeys.settingsPIN] != nil {
+            logger.log("Ignored invalid SettingsPIN (must be non-empty String)")
         }
 
         // Validate and apply DisplayTitle (must be non-empty String)

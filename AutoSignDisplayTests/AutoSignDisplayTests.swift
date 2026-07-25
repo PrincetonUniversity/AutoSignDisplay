@@ -42,6 +42,9 @@ struct AutoSignDisplayTests {
                 ContentView.selectedPresetIndexKey, "selectedPresetIndex", "SelectedPresetIndex",
                 ContentView.confirmBeforeDeleteKey, "confirmBeforeDelete", "ConfirmBeforeDelete",
                 ContentView.displayTitleKey, "displayTitle", "DisplayTitle",
+                ContentView.viewOnlyModeKey, "viewOnlyMode", "ViewOnlyMode",
+                ContentView.settingsPINKey, "settingsPIN", "SettingsPIN",
+                ContentView.settingsPINManagedKey, "settingsPINManaged", "SettingsPINManaged",
                 "com.apple.configuration.managed"
             ]
 
@@ -628,6 +631,182 @@ struct AutoSignDisplayTests {
         vm = await MainActor.run { makeVM() }
         #expect(vm.channelPresets[0].name == "Homepage")
         #expect(vm.channelPresets[0].url == "https://a.example.com/1.m3u8")
+        vm.stopRetryTimer()
+    }
+
+    // MARK: - View Only Mode
+
+    @Test func viewOnlyModeDefaultsOffAndPersists() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        @MainActor func makeVM() -> StreamViewModel { StreamViewModel(logger: TestLogger()) }
+
+        var vm = await MainActor.run { makeVM() }
+        #expect(vm.viewOnlyMode == false)
+
+        await MainActor.run { vm.updateViewOnlyMode(true) }
+        #expect(defaults.bool(forKey: ContentView.viewOnlyModeKey) == true)
+
+        vm.stopRetryTimer()
+        vm = await MainActor.run { makeVM() }
+        #expect(vm.viewOnlyMode == true)
+        vm.stopRetryTimer()
+    }
+
+    @Test func managedViewOnlyModeRejectsIntegerBoolean() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        // A real CFBoolean is accepted.
+        await MainActor.run {
+            defaults.set([AppConfigKeys.viewOnlyMode: true],
+                         forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.bool(forKey: ContentView.viewOnlyModeKey) == true)
+
+        // An integer must be rejected: NSNumber(1) casts to Bool in Swift, so
+        // without the objCType check this would silently read as true.
+        await resetDefaults()
+        await MainActor.run {
+            defaults.set([AppConfigKeys.viewOnlyMode: NSNumber(value: 1)],
+                         forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.object(forKey: ContentView.viewOnlyModeKey) == nil)
+    }
+
+    @Test func managedConfigRemovalClearsViewOnlyMode() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        await MainActor.run {
+            defaults.set(
+                [AppConfigKeys.viewOnlyMode: true,
+                 AppConfigKeys.channelPresets: [["Name": "A", "URL": "https://a.example/1.m3u8"]]],
+                forKey: "com.apple.configuration.managed"
+            )
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.bool(forKey: ContentView.viewOnlyModeKey) == true)
+
+        await MainActor.run {
+            defaults.removeObject(forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.object(forKey: ContentView.viewOnlyModeKey) == nil)
+    }
+
+    // MARK: - Settings PIN
+
+    @Test func settingsUnlockedWhenNoPINSet() async throws {
+        await resetDefaults()
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        #expect(vm.settingsLocked == false)
+        // With no PIN configured, any candidate passes so the gate never blocks.
+        #expect(vm.isCorrectSettingsPIN(""))
+        #expect(vm.isCorrectSettingsPIN("anything"))
+        vm.stopRetryTimer()
+    }
+
+    @Test func settingsPINGatesAndTolerLatesWhitespace() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        @MainActor func makeVM() -> StreamViewModel { StreamViewModel(logger: TestLogger()) }
+
+        var vm = await MainActor.run { makeVM() }
+        await MainActor.run { vm.updateSettingsPIN("4821") }
+        #expect(vm.settingsLocked)
+        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "4821")
+
+        #expect(vm.isCorrectSettingsPIN("4821"))
+        // A stray space from the on-screen keyboard should not read as wrong.
+        #expect(vm.isCorrectSettingsPIN(" 4821 "))
+        #expect(!vm.isCorrectSettingsPIN("1234"))
+        #expect(!vm.isCorrectSettingsPIN(""))
+
+        vm.stopRetryTimer()
+        vm = await MainActor.run { makeVM() }
+        #expect(vm.settingsLocked, "PIN must survive a relaunch.")
+
+        // Blank clears the lock.
+        await MainActor.run { vm.updateSettingsPIN("  ") }
+        #expect(vm.settingsLocked == false)
+        #expect(defaults.object(forKey: ContentView.settingsPINKey) == nil)
+        vm.stopRetryTimer()
+    }
+
+    @Test func managedSettingsPINCannotBeChangedOnDevice() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        await MainActor.run {
+            defaults.set([AppConfigKeys.settingsPIN: "  9999  "],
+                         forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        // Trimmed on apply, and flagged as administrator-owned.
+        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "9999")
+        #expect(defaults.bool(forKey: ContentView.settingsPINManagedKey) == true)
+
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        #expect(vm.settingsPINManaged)
+        #expect(vm.isCorrectSettingsPIN("9999"))
+
+        // A local user must not be able to change or clear it.
+        await MainActor.run { vm.updateSettingsPIN("0000") }
+        #expect(vm.settingsPIN == "9999")
+        await MainActor.run { vm.updateSettingsPIN("") }
+        #expect(vm.settingsPIN == "9999")
+        vm.stopRetryTimer()
+    }
+
+    @Test func managedSettingsPINRejectsBlankAndWrongType() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        await MainActor.run {
+            defaults.set([AppConfigKeys.settingsPIN: "   "],
+                         forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.object(forKey: ContentView.settingsPINKey) == nil)
+        #expect(defaults.bool(forKey: ContentView.settingsPINManagedKey) == false)
+
+        await resetDefaults()
+        await MainActor.run {
+            defaults.set([AppConfigKeys.settingsPIN: 4821],
+                         forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.object(forKey: ContentView.settingsPINKey) == nil)
+    }
+
+    @Test func managedConfigRemovalClearsSettingsPIN() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        await MainActor.run {
+            defaults.set([AppConfigKeys.settingsPIN: "4821"],
+                         forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "4821")
+
+        // Pulling the payload must not strand Settings behind a PIN nobody on site
+        // knows. The managed flag alone is enough to trigger the reset, even with no
+        // managed presets involved.
+        await MainActor.run {
+            defaults.removeObject(forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.object(forKey: ContentView.settingsPINKey) == nil)
+        #expect(defaults.bool(forKey: ContentView.settingsPINManagedKey) == false)
+
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        #expect(vm.settingsLocked == false)
         vm.stopRetryTimer()
     }
 

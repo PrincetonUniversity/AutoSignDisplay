@@ -35,6 +35,8 @@ a partial payload manages only what it names.
 | Key | Type | Notes |
 |---|---|---|
 | `DisplayTitle` | String | Heading at the top of the main screen. Must be non-empty. Omit for the app's own name. |
+| `ViewOnlyMode` | Boolean | Reduce the main screen to the preset list. |
+| `SettingsPIN` | String | Require this PIN to open Settings. Must be non-empty. |
 | `PlayOnAppOpen` | Boolean | Begin playback at launch. |
 | `AutoResume` | Boolean | Rebuild the player when a stream stalls or the network drops. |
 | `SettingsDisabled` | Boolean | Lock the on-device Settings screen. |
@@ -66,6 +68,40 @@ When `ChannelPresets` is present the app marks its preset list read-only: the
 on-device Manage Stream Presets screen shows the entries but allows no edits,
 additions, or deletions.
 
+## Locking a display down
+
+Three keys restrict what a local user can do, and they are independent — pick the
+combination that matches how much control the site should have.
+
+| Key | Removes |
+|---|---|
+| `ViewOnlyMode` | Stream URL entry, Play/Clear, and the Manage Stream Presets button. The preset list stays, and pressing a preset plays it. |
+| `SettingsDisabled` | Access to Settings entirely. |
+| `SettingsPIN` | Nothing, but demands a PIN before Settings opens. |
+
+A common pairing is `ViewOnlyMode` with `SettingsPIN`: a local user can switch
+between the channels you provisioned but cannot add streams, edit presets, or
+change playback behavior without the PIN.
+
+`ViewOnlyMode` alone still leaves Settings reachable — deliberately, since
+otherwise a device configured this way could not be taken out of the mode from the
+couch. Combine it with `SettingsDisabled` or `SettingsPIN` if that matters.
+
+### About `SettingsPIN`
+
+**This is a deterrent, not a security control.** The PIN is kept in the app's
+preferences, not the keychain, and it is compared as plain text. It stops a
+passer-by from changing the channel list; it does not stop anyone with device
+access or MDM read access. Do not reuse a PIN that protects anything else.
+
+When the PIN arrives by MDM, the on-device PIN field becomes read-only, so a local
+user cannot change or clear an administrator's PIN. Removing the payload clears the
+PIN along with it — otherwise pulling the configuration would strand Settings behind
+a PIN nobody on site knows.
+
+The prompt appears on each visit to Settings; unlocking is not remembered between
+visits.
+
 ## Booleans must be `<true/>` or `<false/>`
 
 This is the one type rule worth stating outright, because the failure is silent.
@@ -86,6 +122,9 @@ guards against that by inspecting the underlying type and accepting only a real
 CFBoolean. If a Boolean setting seems to be ignored, check that your MDM emitted
 `<true/>` rather than `<integer>1</integer>` — some editors substitute one for the
 other.
+
+This applies to `PlayOnAppOpen`, `AutoResume`, `SettingsDisabled`, and
+`ViewOnlyMode`.
 
 ## Behavior notes
 

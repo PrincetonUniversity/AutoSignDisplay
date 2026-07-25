@@ -75,12 +75,24 @@ struct FieldEditingPatternTests {
             """
         )
 
-        for destination in ["ChannelPresetsView(", "SettingsView("] {
-            #expect(
-                code.contains(destination),
-                "ContentView should still construct \(destination) as a push destination."
-            )
-        }
+        #expect(
+            code.contains("ChannelPresetsView("),
+            "ContentView should still construct ChannelPresetsView( as a push destination."
+        )
+
+        // Settings is reached through SettingsGateView, which shows the PIN prompt
+        // when one is configured and SettingsView otherwise. Both contain text
+        // fields, so both have to be pushed rather than presented.
+        #expect(
+            code.contains("SettingsGateView("),
+            "ContentView should reach Settings through SettingsGateView( as a push destination."
+        )
+
+        let settingsSource = codeOnly(try source(of: "SettingsView.swift"))
+        #expect(
+            settingsSource.contains("SettingsView("),
+            "SettingsGateView should construct SettingsView once unlocked."
+        )
     }
 
     @Test func onlyTheVideoPlayerIsPresentedAsAFullScreenCover() throws {

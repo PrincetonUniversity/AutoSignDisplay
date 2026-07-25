@@ -22,6 +22,14 @@
   <key>SettingsDisabled</key>
   <true/>
 
+  <!-- Locked-down display: only the preset list is reachable, and Settings needs
+       a PIN. Drop ViewOnlyMode if a local user should be able to enter URLs. -->
+  <key>ViewOnlyMode</key>
+  <true/>
+
+  <key>SettingsPIN</key>
+  <string>4821</string>
+
   <key>RetryTimeout</key>
   <real>5.0</real>
 

@@ -90,6 +90,11 @@ struct ContentView: View {
     static let channelPresetsManagedKey = "channelPresetsManaged"
     static let selectedPresetIndexKey = "selectedPresetIndex"
     static let displayTitleKey = "displayTitle"
+    static let viewOnlyModeKey = "viewOnlyMode"
+    static let settingsPINKey = "settingsPIN"
+    /// True when the PIN came from a managed payload, which makes the on-device PIN
+    /// field read-only. Mirrors the channelPresetsManaged pattern.
+    static let settingsPINManagedKey = "settingsPINManaged"
     // Intentionally has no AppConfigKeys counterpart: presets are read-only when
     // MDM-managed, so there is nothing to confirm deleting and nothing for an
     // administrator to configure. Purely a local preference.
@@ -113,74 +118,79 @@ struct ContentView: View {
                             .cornerRadius(6)
                     }
 
-                    VStack(alignment: .leading, spacing: ScreenMetrics.rowSpacing) {
-                        SectionHeader(isPlaying ? "Playing Stream" : "Selected Stream")
+                    // View Only mode reduces this screen to the preset list: no URL
+                    // entry, no Play/Clear, no preset management. Switching streams by
+                    // pressing a preset is the only affordance.
+                    if !viewModel.viewOnlyMode {
+                        VStack(alignment: .leading, spacing: ScreenMetrics.rowSpacing) {
+                            SectionHeader(isPlaying ? "Playing Stream" : "Selected Stream")
 
-                        // Locked while playing: changing the URL under a running
-                        // player would leave the field describing something other
-                        // than what is on screen. Stop first.
-                        TextField(
-                            "Enter a Stream URL or select a Stream Preset.",
-                            text: Binding(
-                                get: { viewModel.streamURL },
-                                set: { newValue in
-                                    viewModel.updateStreamURL(newValue)
-                                }
-                            )
-                        )
-                        .padding(.vertical, 8)
-                        .accessibilityLabel("HLS stream URL")
-                        .disabled(isPlaying)
-                        .accessibilityHint(isPlaying ? "Stop the stream to edit" : "")
-
-                        // Leaving the fullscreen player only hides it — playback
-                        // continues, audibly — so while it lives these two replace
-                        // Play: one way back to it, one way to end it.
-                        if isPlaying {
-                            HStack(spacing: ScreenMetrics.buttonSpacing) {
-                                Button {
-                                    showPlayer = true
-                                } label: {
-                                    CenteredRowLabel(title: "Return to Stream")
-                                }
-                                .buttonStyle(.borderedProminent)
-
-                                Button {
-                                    viewModel.stopPlayback()
-                                    AccessibilityNotification.Announcement("Playback stopped").post()
-                                } label: {
-                                    CenteredRowLabel(title: "Stop Stream")
-                                }
-                                .buttonStyle(.bordered)
-                            }
-                        } else {
-                            HStack(spacing: ScreenMetrics.buttonSpacing) {
-                                Button {
-                                    if let url = URL(string: viewModel.streamURL) {
-                                        viewModel.player = AVPlayer(url: url)
-                                        showPlayer = true
+                            // Locked while playing: changing the URL under a running
+                            // player would leave the field describing something other
+                            // than what is on screen. Stop first.
+                            TextField(
+                                "Enter a Stream URL or select a Stream Preset.",
+                                text: Binding(
+                                    get: { viewModel.streamURL },
+                                    set: { newValue in
+                                        viewModel.updateStreamURL(newValue)
                                     }
-                                } label: {
-                                    CenteredRowLabel(title: "Play Stream")
-                                }
-                                .buttonStyle(.borderedProminent)
-                                .disabled(viewModel.streamURL.isEmpty)
-
-                                // Clears either a typed URL or a preset selection —
-                                // both live in the same two properties.
-                                Button {
-                                    viewModel.clearStream()
-                                    AccessibilityNotification.Announcement("Stream cleared").post()
-                                } label: {
-                                    CenteredRowLabel(title: "Clear Stream")
-                                }
-                                .buttonStyle(.bordered)
-                                .disabled(!viewModel.canClearStream)
-                                .accessibilityHint(
-                                    viewModel.channelPresetsManaged
-                                        ? "Managed by your administrator"
-                                        : ""
                                 )
+                            )
+                            .padding(.vertical, 8)
+                            .accessibilityLabel("HLS stream URL")
+                            .disabled(isPlaying)
+                            .accessibilityHint(isPlaying ? "Stop the stream to edit" : "")
+
+                            // Leaving the fullscreen player only hides it — playback
+                            // continues, audibly — so while it lives these two replace
+                            // Play: one way back to it, one way to end it.
+                            if isPlaying {
+                                HStack(spacing: ScreenMetrics.buttonSpacing) {
+                                    Button {
+                                        showPlayer = true
+                                    } label: {
+                                        CenteredRowLabel(title: "Return to Stream")
+                                    }
+                                    .buttonStyle(.borderedProminent)
+
+                                    Button {
+                                        viewModel.stopPlayback()
+                                        AccessibilityNotification.Announcement("Playback stopped").post()
+                                    } label: {
+                                        CenteredRowLabel(title: "Stop Stream")
+                                    }
+                                    .buttonStyle(.bordered)
+                                }
+                            } else {
+                                HStack(spacing: ScreenMetrics.buttonSpacing) {
+                                    Button {
+                                        if let url = URL(string: viewModel.streamURL) {
+                                            viewModel.player = AVPlayer(url: url)
+                                            showPlayer = true
+                                        }
+                                    } label: {
+                                        CenteredRowLabel(title: "Play Stream")
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                    .disabled(viewModel.streamURL.isEmpty)
+
+                                    // Clears either a typed URL or a preset selection —
+                                    // both live in the same two properties.
+                                    Button {
+                                        viewModel.clearStream()
+                                        AccessibilityNotification.Announcement("Stream cleared").post()
+                                    } label: {
+                                        CenteredRowLabel(title: "Clear Stream")
+                                    }
+                                    .buttonStyle(.bordered)
+                                    .disabled(!viewModel.canClearStream)
+                                    .accessibilityHint(
+                                        viewModel.channelPresetsManaged
+                                            ? "Managed by your administrator"
+                                            : ""
+                                    )
+                                }
                             }
                         }
                     }
@@ -201,10 +211,12 @@ struct ContentView: View {
                                         )
                                     }
                                     .buttonStyle(.borderedProminent)
-                                    // Locked while playing: switching streams from
-                                    // under a running player is the same confusion as
-                                    // editing the URL.
-                                    .disabled(isPlaying)
+                                    // Normally locked while playing, since switching
+                                    // streams from under a running player is the same
+                                    // confusion as editing the URL. In View Only mode
+                                    // these rows are the only control there is, so
+                                    // they stay live.
+                                    .disabled(isPlaying && !viewModel.viewOnlyMode)
                                     .accessibilityLabel(presetAccessibilityLabel(index: index, preset: preset))
                                     .accessibilityAddTraits(viewModel.selectedPresetIndex == index ? .isSelected : [])
                                     .accessibilityHint(presetActionHint(index: index))
@@ -225,39 +237,21 @@ struct ContentView: View {
                     // is left stuck white with compact text. Fields reached by a
                     // navigation push behave correctly, like the URL field above.
                     HStack(spacing: ScreenMetrics.buttonSpacing) {
-                        NavigationLink {
-                            ChannelPresetsView(viewModel: viewModel)
-                        } label: {
-                            CenteredRowLabel(title: "Manage Stream Presets")
+                        // Hidden in View Only mode. Settings stays, or there would be
+                        // no way to leave the mode from the device.
+                        if !viewModel.viewOnlyMode {
+                            NavigationLink {
+                                ChannelPresetsView(viewModel: viewModel)
+                            } label: {
+                                CenteredRowLabel(title: "Manage Stream Presets")
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(viewModel.channelPresetsManaged)
+                            .accessibilityHint(viewModel.channelPresetsManaged ? "Managed by your administrator" : "")
                         }
-                        .buttonStyle(.bordered)
-                        .disabled(viewModel.channelPresetsManaged)
-                        .accessibilityHint(viewModel.channelPresetsManaged ? "Managed by your administrator" : "")
 
                         NavigationLink {
-                            SettingsView(
-                                isPlayingOnOpen: $viewModel.isPlayingOnOpen,
-                                retryTimeout: $viewModel.retryTimeout,
-                                autoResume: $viewModel.autoResume,
-                                settingsDisabled: $viewModel.settingsDisabled,
-                                confirmBeforeDelete: $viewModel.confirmBeforeDelete,
-                                displayTitle: $viewModel.displayTitle,
-                                channelPresetsManaged: viewModel.channelPresetsManaged,
-                                onRetryTimeoutChanged: {
-                                    viewModel.updateSettings(
-                                        isPlayingOnOpen: viewModel.isPlayingOnOpen,
-                                        retryTimeout: viewModel.retryTimeout,
-                                        autoResume: viewModel.autoResume,
-                                        settingsDisabled: viewModel.settingsDisabled
-                                    )
-                                },
-                                onConfirmBeforeDeleteChanged: { newValue in
-                                    viewModel.updateConfirmBeforeDelete(newValue)
-                                },
-                                onDisplayTitleChanged: { newValue in
-                                    viewModel.updateDisplayTitle(newValue)
-                                }
-                            )
+                            SettingsGateView(viewModel: viewModel)
                         } label: {
                             CenteredRowLabel(title: "Settings")
                         }
@@ -307,6 +301,22 @@ private extension ContentView {
     /// selection. Deselect is unavailable under MDM, where the administrator's
     /// channel is meant to keep playing.
     func togglePreset(at index: Int) {
+        // View Only mode has no Play button, so pressing a preset has to start it —
+        // otherwise the press would appear to do nothing. Pressing the one already
+        // playing returns to the player rather than clearing it, since clearing would
+        // leave a display with nothing to show and no way to recover.
+        if viewModel.viewOnlyMode {
+            if viewModel.selectedPresetIndex == index, isPlaying {
+                showPlayer = true
+                return
+            }
+            viewModel.selectPreset(at: index)
+            viewModel.playStream()
+            showPlayer = true
+            AccessibilityNotification.Announcement("Playing preset \(index + 1)").post()
+            return
+        }
+
         if viewModel.selectedPresetIndex == index, !viewModel.channelPresetsManaged {
             viewModel.deselectPreset()
             AccessibilityNotification.Announcement("Deselected preset \(index + 1)").post()
@@ -319,6 +329,12 @@ private extension ContentView {
     /// Tells VoiceOver what pressing the row will do, since the same control both
     /// selects and deselects — and does neither while a stream is playing.
     func presetActionHint(index: Int) -> String {
+        if viewModel.viewOnlyMode {
+            if viewModel.selectedPresetIndex == index, isPlaying {
+                return "Returns to this stream"
+            }
+            return "Plays this stream"
+        }
         if isPlaying { return "Stop the stream to change selection" }
         guard viewModel.selectedPresetIndex == index else { return "Selects this stream" }
         return viewModel.channelPresetsManaged ? "" : "Clears this selection"

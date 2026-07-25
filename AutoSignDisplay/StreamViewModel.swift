@@ -82,6 +82,13 @@ class StreamViewModel: ObservableObject {
     @Published var confirmBeforeDelete: Bool
     /// Custom main-screen heading. Empty means "use `defaultDisplayTitle`".
     @Published var displayTitle: String
+    /// Reduces the main screen to the preset list: no URL entry, no preset
+    /// management. Pressing a preset plays it.
+    @Published var viewOnlyMode: Bool
+    /// Gates the Settings screen. Empty means no lock.
+    @Published var settingsPIN: String
+    /// The PIN came from MDM, so it cannot be changed on the device.
+    @Published var settingsPINManaged: Bool
     @Published var selectedPresetIndex: Int?
     @Published var defaultChannelURL: String?
     @Published var player: AVPlayer?
@@ -112,6 +119,9 @@ class StreamViewModel: ObservableObject {
         self.autoResume = defaults.bool(forKey: ContentView.autoResumeKey)
         self.settingsDisabled = defaults.bool(forKey: ContentView.settingsDisabledKey)
         self.displayTitle = defaults.string(forKey: ContentView.displayTitleKey) ?? ""
+        self.viewOnlyMode = defaults.bool(forKey: ContentView.viewOnlyModeKey)
+        self.settingsPIN = defaults.string(forKey: ContentView.settingsPINKey) ?? ""
+        self.settingsPINManaged = defaults.bool(forKey: ContentView.settingsPINManagedKey)
 
         // Defaults to ON. bool(forKey:) yields false for a missing key, so the
         // absent case has to be seeded explicitly rather than read.
@@ -337,6 +347,35 @@ class StreamViewModel: ObservableObject {
             UserDefaults.standard.removeObject(forKey: ContentView.displayTitleKey)
         } else {
             UserDefaults.standard.set(trimmed, forKey: ContentView.displayTitleKey)
+        }
+    }
+
+    func updateViewOnlyMode(_ enabled: Bool) {
+        viewOnlyMode = enabled
+        UserDefaults.standard.set(enabled, forKey: ContentView.viewOnlyModeKey)
+    }
+
+    /// True when Settings should demand a PIN before opening.
+    var settingsLocked: Bool {
+        !settingsPIN.isEmpty
+    }
+
+    /// Case- and whitespace-insensitive comparison, so a stray space typed on the
+    /// on-screen keyboard does not read as a wrong PIN.
+    func isCorrectSettingsPIN(_ candidate: String) -> Bool {
+        guard settingsLocked else { return true }
+        return candidate.trimmingCharacters(in: .whitespaces) == settingsPIN
+    }
+
+    /// Persists a PIN. Blank clears the lock. Refused when MDM owns the PIN.
+    func updateSettingsPIN(_ pin: String) {
+        guard !settingsPINManaged else { return }
+        let trimmed = pin.trimmingCharacters(in: .whitespaces)
+        settingsPIN = trimmed
+        if trimmed.isEmpty {
+            UserDefaults.standard.removeObject(forKey: ContentView.settingsPINKey)
+        } else {
+            UserDefaults.standard.set(trimmed, forKey: ContentView.settingsPINKey)
         }
     }
 

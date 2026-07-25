@@ -30,6 +30,22 @@
   <key>AutoResume</key>
   <true/>
 
+  <!-- Boolean. Reduce the main screen to the preset list: no stream URL entry,
+       no Play/Clear, no preset management. Pressing a preset plays it. Intended
+       for displays a local user may re-point but must not reconfigure. -->
+  <key>ViewOnlyMode</key>
+  <false/>
+
+  <!-- String, must be non-empty. Require this PIN to open Settings. Setting it
+       here also makes the on-device PIN field read-only, so a local user cannot
+       change or remove an administrator's PIN.
+
+       This is a casual deterrent, not a security control: it is stored in the
+       app's preferences, not the keychain. Do not reuse a PIN that protects
+       anything else. -->
+  <key>SettingsPIN</key>
+  <string>4821</string>
+
   <!-- Boolean. Lock the on-device Settings screen. Leave true for unattended
        displays so a passer-by cannot change playback behavior. -->
   <key>SettingsDisabled</key>

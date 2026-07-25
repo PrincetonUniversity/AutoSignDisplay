@@ -3,6 +3,11 @@
  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
   <dict>
+    <!-- String: heading shown at the top of the main screen. Omit for the
+         app's own name. Useful for naming the location a display serves. -->
+    <key>DisplayTitle</key>
+    <string>Engineering Quad — Lobby</string>
+
     <!-- Boolean: play the configured stream when the app opens -->
     <key>PlayOnAppOpen</key>
     <true/>

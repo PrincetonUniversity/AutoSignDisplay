@@ -16,6 +16,12 @@
 -->
 <plist version="1.0">
 <dict>
+  <!-- String, must be non-empty. Heading shown at the top of the main screen.
+       Omit to use the app's own name. Handy for naming the location a display
+       serves, so a technician can tell screens apart at a glance. -->
+  <key>DisplayTitle</key>
+  <string>Engineering Quad — Lobby</string>
+
   <!-- Boolean. Start playing as soon as the app launches. The kiosk setting. -->
   <key>PlayOnAppOpen</key>
   <true/>

@@ -10,6 +10,9 @@
 -->
 <plist version="1.0">
 <dict>
+  <key>DisplayTitle</key>
+  <string>Engineering Quad — Lobby</string>
+
   <key>PlayOnAppOpen</key>
   <true/>
 

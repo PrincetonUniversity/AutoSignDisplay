@@ -89,6 +89,7 @@ struct ContentView: View {
     static let defaultChannelKey = "defaultChannel"
     static let channelPresetsManagedKey = "channelPresetsManaged"
     static let selectedPresetIndexKey = "selectedPresetIndex"
+    static let displayTitleKey = "displayTitle"
     // Intentionally has no AppConfigKeys counterpart: presets are read-only when
     // MDM-managed, so there is nothing to confirm deleting and nothing for an
     // administrator to configure. Purely a local preference.
@@ -240,6 +241,7 @@ struct ContentView: View {
                                 autoResume: $viewModel.autoResume,
                                 settingsDisabled: $viewModel.settingsDisabled,
                                 confirmBeforeDelete: $viewModel.confirmBeforeDelete,
+                                displayTitle: $viewModel.displayTitle,
                                 channelPresetsManaged: viewModel.channelPresetsManaged,
                                 onRetryTimeoutChanged: {
                                     viewModel.updateSettings(
@@ -251,6 +253,9 @@ struct ContentView: View {
                                 },
                                 onConfirmBeforeDeleteChanged: { newValue in
                                     viewModel.updateConfirmBeforeDelete(newValue)
+                                },
+                                onDisplayTitleChanged: { newValue in
+                                    viewModel.updateDisplayTitle(newValue)
                                 }
                             )
                         } label: {
@@ -265,7 +270,7 @@ struct ContentView: View {
                 .padding(.horizontal, ScreenMetrics.horizontalPadding)
                 .padding(.vertical, ScreenMetrics.verticalPadding)
             }
-            .navigationTitle("AutoSignDisplay")
+            .navigationTitle(viewModel.effectiveDisplayTitle)
             .onAppear {
                 viewModel.startStreamIfNeeded()
                 scheduleAutoPlayPresentation()

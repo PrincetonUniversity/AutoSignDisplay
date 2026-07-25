@@ -197,11 +197,13 @@ struct SettingsView: View {
     @Binding var autoResume: Bool
     @Binding var settingsDisabled: Bool
     @Binding var confirmBeforeDelete: Bool
+    @Binding var displayTitle: String
     /// Presets are read-only under MDM, so the delete-confirmation preference has
     /// nothing to act on and is hidden entirely rather than shown disabled.
     var channelPresetsManaged: Bool
     var onRetryTimeoutChanged: () -> Void
     var onConfirmBeforeDeleteChanged: (Bool) -> Void
+    var onDisplayTitleChanged: (String) -> Void
 
     var body: some View {
         ZStack {
@@ -218,6 +220,25 @@ struct SettingsView: View {
                     .fontWeight(.semibold)
                     .padding(.bottom, ScreenMetrics.titleSpacing)
                     .accessibilityAddTraits(.isHeader)
+
+                VStack(alignment: .leading, spacing: ScreenMetrics.rowSpacing) {
+                    SectionHeader("Appearance")
+
+                    LabeledTextField(
+                        label: "Title",
+                        placeholder: StreamViewModel.defaultDisplayTitle,
+                        text: Binding(
+                            get: { displayTitle },
+                            set: { onDisplayTitleChanged($0) }
+                        ),
+                        disabled: settingsDisabled,
+                        accessibilityLabelText: "Main screen title"
+                    )
+
+                    Text("Heading shown at the top of the main screen. Leave blank for \"\(StreamViewModel.defaultDisplayTitle)\".")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
 
                 VStack(alignment: .leading, spacing: ScreenMetrics.rowSpacing) {
                     SectionHeader("Playback")

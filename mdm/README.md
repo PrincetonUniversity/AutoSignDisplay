@@ -34,6 +34,7 @@ a partial payload manages only what it names.
 
 | Key | Type | Notes |
 |---|---|---|
+| `DisplayTitle` | String | Heading at the top of the main screen. Must be non-empty. Omit for the app's own name. |
 | `PlayOnAppOpen` | Boolean | Begin playback at launch. |
 | `AutoResume` | Boolean | Rebuild the player when a stream stalls or the network drops. |
 | `SettingsDisabled` | Boolean | Lock the on-device Settings screen. |
@@ -88,6 +89,12 @@ other.
 
 ## Behavior notes
 
+- **`DisplayTitle` is useful for telling displays apart.** Pushing the location a
+  screen serves — `Engineering Quad — Lobby` — means a technician can identify a
+  display without cross-referencing its serial number. Blank or whitespace-only
+  values are rejected, so a mistake leaves the default heading rather than an empty
+  one. Users can also set it on-device under Settings → Appearance unless
+  `SettingsDisabled` is true.
 - **`RetryTimeout` is not restricted to the values in the UI.** The Settings
   screen cycles through 3/5/10/15/30/60 seconds because typing digits on a remote
   is slow, but any positive number you push is honored and displayed. A managed

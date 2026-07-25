@@ -60,6 +60,11 @@ struct ChannelPreset: Equatable {
 
 class StreamViewModel: ObservableObject {
     static let maxChannelPresets = 20
+
+    /// Shown at the top of the main screen when no custom title is set. Stored as
+    /// empty-means-default rather than seeding this string, so a future rename of
+    /// the app carries through for anyone who never customized it.
+    static let defaultDisplayTitle = "AutoSignDisplay"
     static let defaultPresets: [ChannelPreset] = [
         ChannelPreset(name: "Channel 1", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"),
         ChannelPreset(name: "Channel 2", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"),
@@ -75,6 +80,8 @@ class StreamViewModel: ObservableObject {
     @Published var channelPresets: [ChannelPreset]
     @Published var channelPresetsManaged: Bool
     @Published var confirmBeforeDelete: Bool
+    /// Custom main-screen heading. Empty means "use `defaultDisplayTitle`".
+    @Published var displayTitle: String
     @Published var selectedPresetIndex: Int?
     @Published var defaultChannelURL: String?
     @Published var player: AVPlayer?
@@ -104,6 +111,7 @@ class StreamViewModel: ObservableObject {
         self.retryTimeout = timeout == 0 ? 5.0 : timeout
         self.autoResume = defaults.bool(forKey: ContentView.autoResumeKey)
         self.settingsDisabled = defaults.bool(forKey: ContentView.settingsDisabledKey)
+        self.displayTitle = defaults.string(forKey: ContentView.displayTitleKey) ?? ""
 
         // Defaults to ON. bool(forKey:) yields false for a missing key, so the
         // absent case has to be seeded explicitly rather than read.
@@ -311,6 +319,24 @@ class StreamViewModel: ObservableObject {
             updateStreamURL(url, selectedPresetIndex: index)
         } else if selectedPresetIndex == nil, streamURL == url {
             updateStreamURL(url)
+        }
+    }
+
+    /// What the main screen actually shows, resolving empty to the default.
+    var effectiveDisplayTitle: String {
+        let trimmed = displayTitle.trimmingCharacters(in: .whitespaces)
+        return trimmed.isEmpty ? StreamViewModel.defaultDisplayTitle : trimmed
+    }
+
+    /// Persists a custom title. Blank input clears the override rather than storing
+    /// an empty heading, so the field doubles as "reset to default".
+    func updateDisplayTitle(_ title: String) {
+        let trimmed = title.trimmingCharacters(in: .whitespaces)
+        displayTitle = trimmed
+        if trimmed.isEmpty {
+            UserDefaults.standard.removeObject(forKey: ContentView.displayTitleKey)
+        } else {
+            UserDefaults.standard.set(trimmed, forKey: ContentView.displayTitleKey)
         }
     }
 

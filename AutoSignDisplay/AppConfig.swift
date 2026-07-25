@@ -14,6 +14,7 @@ struct AppConfigKeys {
     static let settingsDisabled = "SettingsDisabled"
     static let channelPresets = "ChannelPresets"
     static let defaultChannel = "DefaultChannel"
+    static let displayTitle = "DisplayTitle"
 }
 
 class AppConfig {
@@ -38,6 +39,7 @@ class AppConfig {
                 defaults.removeObject(forKey: ContentView.autoResumeKey)
                 defaults.removeObject(forKey: ContentView.settingsDisabledKey)
                 defaults.removeObject(forKey: ContentView.retryTimeoutKey)
+                defaults.removeObject(forKey: ContentView.displayTitleKey)
                 logger.log("Cleared managed settings after configuration removal.")
             } else {
                 logger.log("No managed configuration found.")
@@ -202,6 +204,19 @@ class AppConfig {
             }
         } else if managedConfig[AppConfigKeys.streamURL] != nil {
             logger.log("Ignored invalid StreamURL (must be non-empty String)")
+        }
+
+        // Validate and apply DisplayTitle (must be non-empty String)
+        if let displayTitleValue = managedConfig[AppConfigKeys.displayTitle] as? String {
+            let trimmed = displayTitleValue.trimmingCharacters(in: .whitespaces)
+            if trimmed.isEmpty {
+                logger.log("Rejected DisplayTitle: must not be empty")
+            } else {
+                defaults.set(trimmed, forKey: ContentView.displayTitleKey)
+                logger.log("Applied managed DisplayTitle: \(trimmed)")
+            }
+        } else if managedConfig[AppConfigKeys.displayTitle] != nil {
+            logger.log("Ignored invalid DisplayTitle (must be non-empty String)")
         }
 
         // Validate and apply ChannelPresets. Each entry is either:

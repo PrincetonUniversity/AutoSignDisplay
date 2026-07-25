@@ -41,6 +41,7 @@ struct AutoSignDisplayTests {
                 ContentView.defaultChannelKey, "defaultChannel", "DefaultChannel",
                 ContentView.selectedPresetIndexKey, "selectedPresetIndex", "SelectedPresetIndex",
                 ContentView.confirmBeforeDeleteKey, "confirmBeforeDelete", "ConfirmBeforeDelete",
+                ContentView.displayTitleKey, "displayTitle", "DisplayTitle",
                 "com.apple.configuration.managed"
             ]
 
@@ -627,6 +628,108 @@ struct AutoSignDisplayTests {
         vm = await MainActor.run { makeVM() }
         #expect(vm.channelPresets[0].name == "Homepage")
         #expect(vm.channelPresets[0].url == "https://a.example.com/1.m3u8")
+        vm.stopRetryTimer()
+    }
+
+    // MARK: - Display Title
+
+    @Test func displayTitleFallsBackToDefaultWhenUnset() async throws {
+        await resetDefaults()
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        #expect(vm.displayTitle == "")
+        #expect(vm.effectiveDisplayTitle == StreamViewModel.defaultDisplayTitle)
+        vm.stopRetryTimer()
+    }
+
+    @Test func displayTitleUpdatePersistsAndBlankClearsIt() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        @MainActor func makeVM() -> StreamViewModel { StreamViewModel(logger: TestLogger()) }
+
+        var vm = await MainActor.run { makeVM() }
+        await MainActor.run { vm.updateDisplayTitle("Lobby Display") }
+        #expect(vm.effectiveDisplayTitle == "Lobby Display")
+        #expect(defaults.string(forKey: ContentView.displayTitleKey) == "Lobby Display")
+
+        vm.stopRetryTimer()
+        vm = await MainActor.run { makeVM() }
+        #expect(vm.effectiveDisplayTitle == "Lobby Display")
+
+        // Blank input clears the override rather than storing an empty heading, so
+        // the field doubles as "reset to default".
+        await MainActor.run { vm.updateDisplayTitle("   ") }
+        #expect(vm.displayTitle == "")
+        #expect(defaults.object(forKey: ContentView.displayTitleKey) == nil)
+        #expect(vm.effectiveDisplayTitle == StreamViewModel.defaultDisplayTitle)
+        vm.stopRetryTimer()
+    }
+
+    @Test func managedDisplayTitleIsAppliedAndTrimmed() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        await MainActor.run {
+            defaults.set(
+                [AppConfigKeys.displayTitle: "  Engineering Quad — Lobby  "],
+                forKey: "com.apple.configuration.managed"
+            )
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+
+        #expect(defaults.string(forKey: ContentView.displayTitleKey) == "Engineering Quad — Lobby")
+
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        #expect(vm.effectiveDisplayTitle == "Engineering Quad — Lobby")
+        vm.stopRetryTimer()
+    }
+
+    @Test func managedDisplayTitleRejectsBlankAndWrongType() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        // Whitespace only: rejected, so the default heading stands rather than an
+        // empty one.
+        await MainActor.run {
+            defaults.set([AppConfigKeys.displayTitle: "   "],
+                         forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.object(forKey: ContentView.displayTitleKey) == nil)
+
+        // Wrong type: also rejected.
+        await resetDefaults()
+        await MainActor.run {
+            defaults.set([AppConfigKeys.displayTitle: 42],
+                         forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.object(forKey: ContentView.displayTitleKey) == nil)
+    }
+
+    @Test func managedConfigRemovalClearsDisplayTitle() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        await MainActor.run {
+            defaults.set(
+                [AppConfigKeys.displayTitle: "Managed Heading",
+                 AppConfigKeys.channelPresets: [["Name": "A", "URL": "https://a.example/1.m3u8"]]],
+                forKey: "com.apple.configuration.managed"
+            )
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.string(forKey: ContentView.displayTitleKey) == "Managed Heading")
+
+        // DisplayTitle is MDM-settable, so it must not outlive the payload.
+        await MainActor.run {
+            defaults.removeObject(forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.object(forKey: ContentView.displayTitleKey) == nil)
+
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        #expect(vm.effectiveDisplayTitle == StreamViewModel.defaultDisplayTitle)
         vm.stopRetryTimer()
     }
 

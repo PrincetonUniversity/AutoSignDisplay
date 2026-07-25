@@ -108,10 +108,13 @@ Core behaviors are covered by unit and small integration tests to prevent regres
 
 How to run tests:
 
-1. Use the helper script (recommended) which will boot a simulator and run the tests against a specified UDID:
+1. Use the helper script (recommended). It discovers or boots a simulator, sets the
+   managed/unmanaged state, and pins the run to one device. Runnable from any directory:
 
 ```bash
-./scripts/run-tests.sh --udid <UDID>
+./scripts/run-tests.sh                  # auto-pick a simulator, unmanaged
+./scripts/run-tests.sh --udid <UDID>    # pin a specific device
+./scripts/run-tests.sh --managed        # apply the sample managed payload first
 ```
 
 2. Or run directly with xcodebuild and a pinned UDID to avoid cloned simulators:
@@ -120,11 +123,36 @@ How to run tests:
 xcodebuild -project AutoSignDisplay.xcodeproj -scheme AutoSignDisplay -sdk appletvsimulator -destination 'id=<UDID>' -parallel-testing-enabled NO test
 ```
 
+To build and launch the app on a simulator:
+
+```bash
+./scripts/run.sh                        # build, install, launch
+./scripts/run.sh --managed              # launch with a managed payload applied
+./scripts/run.sh --clean --release      # wipe app data, build Release
+./scripts/run.sh --dry-run              # print the plan without doing it
+```
+
 Test guidance:
 
 - When tests need to change `UserDefaults` values that are main-actor-isolated (for example keys defined in `ContentView`), update `UserDefaults` from the main actor using `await MainActor.run { ... }` to avoid main-actor warnings and Sendable capture issues.
 - Pin a UDID and disable parallel testing for consistent, single-device test runs (this avoids xcodebuild creating cloned simulator devices).
 - If you add features that change persistence or playback lifecycle, add or update unit tests in `AutoSignDisplayTests` that set up `UserDefaults`, create a `StreamViewModel`, and assert the expected `player` state and retry behavior.
+
+### The shared scheme
+
+`AutoSignDisplay.xcodeproj/xcshareddata/xcschemes/AutoSignDisplay.xcscheme` is
+checked in, and needs to stay that way. Without it xcodebuild falls back to an
+auto-generated scheme whose buildables resolve no eligible destinations, so any
+`-scheme … build` invocation fails with:
+
+```
+error: Supported platforms for the buildables in the current scheme is empty.
+```
+
+The *test* action tolerates the auto-generated scheme, which makes this confusing
+to diagnose — tests pass while builds fail. If you recreate the project or add a
+target, confirm the scheme is still marked **Shared** in Product → Scheme → Manage
+Schemes.
 
 ## Helper script: scripts/run-tests.sh
 

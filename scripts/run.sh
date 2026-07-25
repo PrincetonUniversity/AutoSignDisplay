@@ -46,14 +46,10 @@ APP_PATH="$BUILD_DIR/$PROJECT_NAME.app"
 
 echo "[run] configuration=$CONFIGURATION udid=$UDID mode=$MANAGED_MODE"
 
-# Built with -target rather than -scheme: the scheme carries no shared .xcscheme,
-# so xcodebuild resolves no eligible destinations for a plain build action and
-# fails with "Supported platforms ... is empty". The test action is unaffected,
-# which is why run-tests.sh can use -scheme.
 BUILD_CMD=(
   xcodebuild
   -project "$PROJECT_NAME.xcodeproj"
-  -target "$PROJECT_NAME"
+  -scheme "$SCHEME_NAME"
   -sdk appletvsimulator
   -configuration "$CONFIGURATION"
   CONFIGURATION_BUILD_DIR="$BUILD_DIR"

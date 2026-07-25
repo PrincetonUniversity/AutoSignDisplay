@@ -34,6 +34,9 @@ struct SectionHeader: View {
 private struct PresetListRow: View {
     let title: String
     let isSelected: Bool
+    /// True while a player exists, which turns the marker from "this is the one
+    /// chosen" into "this is the one on screen right now".
+    var isPlaying: Bool = false
     @Environment(\.isFocused) private var isFocused
 
     var body: some View {
@@ -45,11 +48,11 @@ private struct PresetListRow: View {
 
             if isSelected {
                 Spacer()
-                Text("Selected")
+                Text(isPlaying ? "Playing" : "Selected")
                     .font(.caption)
                     .foregroundColor(isFocused ? .black.opacity(0.65) : .secondary)
                     .accessibilityHidden(true)
-                Image(systemName: "checkmark.circle.fill")
+                Image(systemName: isPlaying ? "play.circle.fill" : "checkmark.circle.fill")
                     // Focused rows get a near-white background, so the accent blue
                     // needs to darken to stay legible against it.
                     .foregroundColor(isFocused
@@ -110,10 +113,13 @@ struct ContentView: View {
                     }
 
                     VStack(alignment: .leading, spacing: ScreenMetrics.rowSpacing) {
-                        SectionHeader("Selected Stream")
+                        SectionHeader(isPlaying ? "Playing Stream" : "Selected Stream")
 
+                        // Locked while playing: changing the URL under a running
+                        // player would leave the field describing something other
+                        // than what is on screen. Stop first.
                         TextField(
-                            "Enter HLS Stream URL",
+                            "Enter a Stream URL or select a Stream Preset.",
                             text: Binding(
                                 get: { viewModel.streamURL },
                                 set: { newValue in
@@ -123,17 +129,59 @@ struct ContentView: View {
                         )
                         .padding(.vertical, 8)
                         .accessibilityLabel("HLS stream URL")
+                        .disabled(isPlaying)
+                        .accessibilityHint(isPlaying ? "Stop the stream to edit" : "")
 
-                        Button {
-                            if let url = URL(string: viewModel.streamURL) {
-                                viewModel.player = AVPlayer(url: url)
-                                showPlayer = true
+                        // Leaving the fullscreen player only hides it — playback
+                        // continues, audibly — so while it lives these two replace
+                        // Play: one way back to it, one way to end it.
+                        if isPlaying {
+                            HStack(spacing: ScreenMetrics.buttonSpacing) {
+                                Button {
+                                    showPlayer = true
+                                } label: {
+                                    CenteredRowLabel(title: "Return to Stream")
+                                }
+                                .buttonStyle(.borderedProminent)
+
+                                Button {
+                                    viewModel.stopPlayback()
+                                    AccessibilityNotification.Announcement("Playback stopped").post()
+                                } label: {
+                                    CenteredRowLabel(title: "Stop Stream")
+                                }
+                                .buttonStyle(.bordered)
                             }
-                        } label: {
-                            CenteredRowLabel(title: "Play Stream")
+                        } else {
+                            HStack(spacing: ScreenMetrics.buttonSpacing) {
+                                Button {
+                                    if let url = URL(string: viewModel.streamURL) {
+                                        viewModel.player = AVPlayer(url: url)
+                                        showPlayer = true
+                                    }
+                                } label: {
+                                    CenteredRowLabel(title: "Play Stream")
+                                }
+                                .buttonStyle(.borderedProminent)
+                                .disabled(viewModel.streamURL.isEmpty)
+
+                                // Clears either a typed URL or a preset selection —
+                                // both live in the same two properties.
+                                Button {
+                                    viewModel.clearStream()
+                                    AccessibilityNotification.Announcement("Stream cleared").post()
+                                } label: {
+                                    CenteredRowLabel(title: "Clear Stream")
+                                }
+                                .buttonStyle(.bordered)
+                                .disabled(!viewModel.canClearStream)
+                                .accessibilityHint(
+                                    viewModel.channelPresetsManaged
+                                        ? "Managed by your administrator"
+                                        : ""
+                                )
+                            }
                         }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(viewModel.streamURL.isEmpty)
                     }
 
                     if !viewModel.channelPresets.isEmpty {
@@ -147,10 +195,15 @@ struct ContentView: View {
                                     } label: {
                                         PresetListRow(
                                             title: presetDisplayText(preset, index: index),
-                                            isSelected: viewModel.selectedPresetIndex == index
+                                            isSelected: viewModel.selectedPresetIndex == index,
+                                            isPlaying: isPlaying
                                         )
                                     }
                                     .buttonStyle(.borderedProminent)
+                                    // Locked while playing: switching streams from
+                                    // under a running player is the same confusion as
+                                    // editing the URL.
+                                    .disabled(isPlaying)
                                     .accessibilityLabel(presetAccessibilityLabel(index: index, preset: preset))
                                     .accessibilityAddTraits(viewModel.selectedPresetIndex == index ? .isSelected : [])
                                     .accessibilityHint(presetActionHint(index: index))
@@ -259,10 +312,17 @@ private extension ContentView {
     }
 
     /// Tells VoiceOver what pressing the row will do, since the same control both
-    /// selects and deselects.
+    /// selects and deselects — and does neither while a stream is playing.
     func presetActionHint(index: Int) -> String {
+        if isPlaying { return "Stop the stream to change selection" }
         guard viewModel.selectedPresetIndex == index else { return "Selects this stream" }
         return viewModel.channelPresetsManaged ? "" : "Clears this selection"
+    }
+
+    /// A player exists, so a stream is on screen (or paused behind the main view).
+    /// Locks the stream-changing controls and swaps Play for Return/Stop.
+    var isPlaying: Bool {
+        viewModel.player != nil
     }
 
     /// What renders in the main preset list row. Prefer the admin- or user-supplied

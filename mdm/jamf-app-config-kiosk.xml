@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AutoSignDisplay — Managed App Configuration (typical unattended display)
+
+  The smallest payload that produces a locked-down kiosk: one channel, plays on
+  launch, recovers from network drops, on-device settings disabled.
+
+  Replace the URL, then paste into your MDM's app-configuration field for
+  edu.princeton.autosigndisplay.
+-->
+<plist version="1.0">
+<dict>
+  <key>PlayOnAppOpen</key>
+  <true/>
+
+  <key>AutoResume</key>
+  <true/>
+
+  <key>SettingsDisabled</key>
+  <true/>
+
+  <key>RetryTimeout</key>
+  <real>5.0</real>
+
+  <key>ChannelPresets</key>
+  <array>
+    <dict>
+      <key>Name</key>
+      <string>Lobby</string>
+      <key>URL</key>
+      <string>https://stream.example.edu/lobby/index.m3u8</string>
+    </dict>
+  </array>
+
+  <key>DefaultChannel</key>
+  <string>https://stream.example.edu/lobby/index.m3u8</string>
+</dict>
+</plist>

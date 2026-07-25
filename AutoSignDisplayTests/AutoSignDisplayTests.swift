@@ -630,6 +630,137 @@ struct AutoSignDisplayTests {
         vm.stopRetryTimer()
     }
 
+    // MARK: - Stopping Playback
+
+    @Test func stopPlaybackClearsThePlayer() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        defaults.set("https://a.example.com/1.m3u8", forKey: ContentView.lastStreamURLKey)
+        defaults.set(true, forKey: ContentView.playOnOpenKey)
+
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        await MainActor.run { vm.startStreamIfNeeded() }
+        #expect(vm.player != nil)
+
+        await MainActor.run { vm.stopPlayback() }
+        #expect(vm.player == nil)
+        vm.stopRetryTimer()
+    }
+
+    @Test func stopPlaybackSurvivesSceneReactivation() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        defaults.set("https://a.example.com/1.m3u8", forKey: ContentView.lastStreamURLKey)
+        defaults.set(true, forKey: ContentView.playOnOpenKey)
+        // autoResume on is the dangerous combination: the retry timer's resume
+        // condition is `currentItem == nil`, which a nil player also satisfies.
+        defaults.set(true, forKey: ContentView.autoResumeKey)
+
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        await MainActor.run { vm.startStreamIfNeeded() }
+        await MainActor.run { vm.stopPlayback() }
+        #expect(vm.player == nil)
+
+        // ContentView calls this on every scenePhase == .active transition.
+        await MainActor.run { vm.startStreamIfNeeded() }
+        #expect(vm.player == nil, "An explicit stop must not be undone by reactivation.")
+
+        vm.stopRetryTimer()
+    }
+
+    @Test func playStreamClearsTheStoppedFlag() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        defaults.set("https://a.example.com/1.m3u8", forKey: ContentView.lastStreamURLKey)
+
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        await MainActor.run { vm.startStreamIfNeeded() }
+        await MainActor.run { vm.stopPlayback() }
+        #expect(vm.player == nil)
+
+        // Pressing Play Stream is explicit intent and must work after a stop.
+        await MainActor.run { vm.playStream() }
+        #expect(vm.player != nil)
+
+        // ...and reactivation should work normally again from here.
+        await MainActor.run { vm.startStreamIfNeeded() }
+        #expect(vm.player != nil)
+        vm.stopRetryTimer()
+    }
+
+    @Test func playingPresetCannotBeDeleted() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        defaults.set(false, forKey: ContentView.channelPresetsManagedKey)
+        defaults.set(
+            [["Name": "A", "URL": "https://a.example.com/1.m3u8"],
+             ["Name": "B", "URL": "https://b.example.com/2.m3u8"]],
+            forKey: ContentView.channelPresetsKey
+        )
+
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        await MainActor.run {
+            vm.selectPreset(at: 1)
+            vm.playStream()
+        }
+        #expect(vm.player != nil)
+        #expect(vm.isPlayingPreset(at: 1))
+        #expect(!vm.isPlayingPreset(at: 0))
+
+        // The playing entry is protected...
+        await MainActor.run { vm.removeChannelPreset(at: 1) }
+        #expect(vm.channelPresets.count == 2)
+
+        // ...but the others are not.
+        await MainActor.run { vm.removeChannelPreset(at: 0) }
+        #expect(vm.channelPresets.count == 1)
+
+        // Once stopped, it can be removed.
+        await MainActor.run {
+            vm.stopPlayback()
+            vm.removeChannelPreset(at: 0)
+        }
+        #expect(vm.channelPresets.isEmpty)
+        vm.stopRetryTimer()
+    }
+
+    @Test func playingPresetCannotBeEdited() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        defaults.set(false, forKey: ContentView.channelPresetsManagedKey)
+        defaults.set(
+            [["Name": "A", "URL": "https://a.example.com/1.m3u8"],
+             ["Name": "B", "URL": "https://b.example.com/2.m3u8"]],
+            forKey: ContentView.channelPresetsKey
+        )
+
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        await MainActor.run {
+            vm.selectPreset(at: 0)
+            vm.playStream()
+        }
+        #expect(vm.isPlayingPreset(at: 0))
+
+        // The playing entry is frozen...
+        await MainActor.run {
+            vm.updateChannelPresetName(at: 0, name: "Renamed")
+            vm.updateChannelPreset(at: 0, url: "https://z.example.com/z.m3u8")
+        }
+        #expect(vm.channelPresets[0] == ChannelPreset(name: "A", url: "https://a.example.com/1.m3u8"))
+
+        // ...while the others stay editable.
+        await MainActor.run { vm.updateChannelPresetName(at: 1, name: "Renamed B") }
+        #expect(vm.channelPresets[1].name == "Renamed B")
+
+        // Stopping releases the lock.
+        await MainActor.run {
+            vm.stopPlayback()
+            vm.updateChannelPresetName(at: 0, name: "Renamed A")
+        }
+        #expect(vm.channelPresets[0].name == "Renamed A")
+        vm.stopRetryTimer()
+    }
+
     // MARK: - Deselecting a Preset
 
     @Test func deselectPresetClearsSelectionAndURL() async throws {
@@ -678,6 +809,61 @@ struct AutoSignDisplayTests {
         #expect(vm.selectedPresetIndex == nil)
         #expect(vm.streamURL == "")
         vm.stopRetryTimer()
+    }
+
+    @Test func clearStreamClearsATypedURLWithNoSelection() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        defaults.set(false, forKey: ContentView.channelPresetsManagedKey)
+        defaults.set(
+            [["Name": "A", "URL": "https://a.example.com/1.m3u8"]],
+            forKey: ContentView.channelPresetsKey
+        )
+
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        // A URL that matches no preset — the manual-entry case.
+        await MainActor.run { vm.updateStreamURL("https://typed.example.com/x.m3u8") }
+        #expect(vm.selectedPresetIndex == nil)
+        #expect(vm.canClearStream)
+
+        await MainActor.run { vm.clearStream() }
+        #expect(vm.streamURL == "")
+        #expect(defaults.object(forKey: ContentView.lastStreamURLKey) == nil)
+        #expect(!vm.canClearStream, "Nothing left to clear.")
+        vm.stopRetryTimer()
+    }
+
+    @Test func canClearStreamIsFalseWhenEmptyOrManaged() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        // Nothing selected, nothing typed.
+        defaults.set(false, forKey: ContentView.channelPresetsManagedKey)
+        defaults.set(
+            [["Name": "A", "URL": "https://a.example.com/1.m3u8"]],
+            forKey: ContentView.channelPresetsKey
+        )
+        let empty = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        #expect(empty.streamURL == "")
+        #expect(!empty.canClearStream)
+        empty.stopRetryTimer()
+
+        // Managed: the administrator owns the selection, so clearing is unavailable
+        // even though a stream is set.
+        await resetDefaults()
+        defaults.set(
+            [["Name": "Locked", "URL": "https://admin.example.com/1.m3u8"]],
+            forKey: ContentView.channelPresetsKey
+        )
+        defaults.set(true, forKey: ContentView.channelPresetsManagedKey)
+        defaults.set(0, forKey: ContentView.selectedPresetIndexKey)
+        let managed = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        #expect(managed.selectedPresetIndex == 0)
+        #expect(!managed.canClearStream)
+
+        await MainActor.run { managed.clearStream() }
+        #expect(managed.selectedPresetIndex == 0, "Managed selection must survive.")
+        managed.stopRetryTimer()
     }
 
     @Test func managedModeCannotDeselect() async throws {
@@ -764,6 +950,63 @@ struct AutoSignDisplayTests {
 
         // It is not an MDM-settable key, so the managed→unmanaged reset must not touch it.
         #expect(defaults.bool(forKey: ContentView.confirmBeforeDeleteKey) == false)
+    }
+
+    @Test func addChannelPresetWithValuesAppendsCompleteEntry() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        defaults.set(false, forKey: ContentView.channelPresetsManagedKey)
+        defaults.set(
+            [["Name": "First", "URL": "https://a.example.com/1.m3u8"]],
+            forKey: ContentView.channelPresetsKey
+        )
+
+        @MainActor func makeVM() -> StreamViewModel { StreamViewModel(logger: TestLogger()) }
+
+        var vm = await MainActor.run { makeVM() }
+        let newIndex = await MainActor.run {
+            vm.addChannelPreset(name: "Second", url: "https://b.example.com/2.m3u8")
+        }
+
+        // Returned index lets the caller scroll to (and announce) the new row.
+        #expect(newIndex == 1)
+        #expect(vm.channelPresets.count == 2)
+        #expect(vm.channelPresets[1] == ChannelPreset(name: "Second", url: "https://b.example.com/2.m3u8"))
+
+        vm.stopRetryTimer()
+        vm = await MainActor.run { makeVM() }
+        #expect(vm.channelPresets[1].name == "Second")
+        #expect(vm.channelPresets[1].url == "https://b.example.com/2.m3u8")
+        vm.stopRetryTimer()
+    }
+
+    @Test func addChannelPresetReturnsNilWhenManagedOrAtCap() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        // Managed: refuses outright.
+        defaults.set(
+            [["Name": "Locked", "URL": "https://admin.example.com/1.m3u8"]],
+            forKey: ContentView.channelPresetsKey
+        )
+        defaults.set(true, forKey: ContentView.channelPresetsManagedKey)
+        let managed = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        #expect(managed.addChannelPreset(name: "X", url: "https://x.example.com/x.m3u8") == nil)
+        #expect(managed.channelPresets.count == 1)
+        managed.stopRetryTimer()
+
+        // At the cap: also refuses, so the caller has no index to scroll to.
+        await resetDefaults()
+        let full = (0..<StreamViewModel.maxChannelPresets).map {
+            ["Name": "P\($0)", "URL": "https://a.example.com/\($0).m3u8"]
+        }
+        defaults.set(false, forKey: ContentView.channelPresetsManagedKey)
+        defaults.set(full, forKey: ContentView.channelPresetsKey)
+        let capped = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        #expect(capped.channelPresets.count == StreamViewModel.maxChannelPresets)
+        #expect(capped.addChannelPreset(name: "Extra", url: "https://a.example.com/extra.m3u8") == nil)
+        #expect(capped.channelPresets.count == StreamViewModel.maxChannelPresets)
+        capped.stopRetryTimer()
     }
 
     @Test func urlEditPersistsAndRoundTrips() async throws {

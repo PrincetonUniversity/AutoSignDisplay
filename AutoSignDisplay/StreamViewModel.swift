@@ -81,6 +81,11 @@ class StreamViewModel: ObservableObject {
 
     private var retryTimer: Timer?
 
+    /// Set when the user explicitly stops playback, so neither the retry timer nor a
+    /// scene-phase reactivation brings the player back. Deliberately in-memory only:
+    /// a fresh launch honors `PlayOnAppOpen` again, which the kiosk path depends on.
+    private var playbackStoppedByUser = false
+
     // Inject a logger for easier testing. Defaults to printing to stdout.
     private let logger: Logger
 
@@ -230,15 +235,15 @@ class StreamViewModel: ObservableObject {
         updateStreamURL(channelPresets[index].url, selectedPresetIndex: index)
     }
 
-    /// Clear the active preset.
+    /// Clears the active stream, whether it came from a preset or was typed by hand.
     ///
-    /// Also clears `streamURL`. Leaving the URL behind would not survive a
-    /// relaunch: `init()` re-derives `selectedPresetIndex` by matching the stored
-    /// URL against the preset list, so the selection would silently come back.
+    /// Clears `streamURL` as well as the selection. Leaving the URL behind would not
+    /// survive a relaunch: `init()` re-derives `selectedPresetIndex` by matching the
+    /// stored URL against the preset list, so the selection would silently come back.
     ///
     /// Blocked under MDM — the administrator's `DefaultChannel` is meant to play
     /// unattended, and `init()` would re-apply it on the next launch anyway.
-    func deselectPreset() {
+    func clearStream() {
         guard !channelPresetsManaged else { return }
         selectedPresetIndex = nil
         streamURL = ""
@@ -246,19 +251,42 @@ class StreamViewModel: ObservableObject {
         persistSelectedPresetIndex()
     }
 
+    /// Pressing the already-selected preset clears it — the same effect as Clear Stream.
+    func deselectPreset() {
+        clearStream()
+    }
+
+    /// False when there is nothing to clear, or when MDM owns the selection.
+    var canClearStream: Bool {
+        !channelPresetsManaged && (!streamURL.isEmpty || selectedPresetIndex != nil)
+    }
+
     /// True when tapping preset `index` would clear the selection rather than set it.
     func isPresetSelected(_ index: Int) -> Bool {
         selectedPresetIndex == index
     }
 
-    func addChannelPreset() {
-        guard !channelPresetsManaged, channelPresets.count < StreamViewModel.maxChannelPresets else { return }
-        channelPresets.append(ChannelPreset(name: "", url: ""))
+    /// True when preset `index` is the stream currently loaded in the player.
+    func isPlayingPreset(at index: Int) -> Bool {
+        player != nil && selectedPresetIndex == index
+    }
+
+    /// Appends a preset. Defaults produce a blank entry; the Add Preset screen
+    /// supplies both values so the list never gains an empty row.
+    @discardableResult
+    func addChannelPreset(name: String = "", url: String = "") -> Int? {
+        guard !channelPresetsManaged, channelPresets.count < StreamViewModel.maxChannelPresets else { return nil }
+        channelPresets.append(ChannelPreset(name: name, url: url))
         persistChannelPresets()
+        return channelPresets.indices.last
     }
 
     func removeChannelPreset(at index: Int) {
         guard !channelPresetsManaged, channelPresets.indices.contains(index) else { return }
+        // Refuse to remove the entry that is currently playing. The UI disables the
+        // button, but enforce it here too: deleting it would shift every later index
+        // while the player keeps running against a preset that no longer exists.
+        guard !isPlayingPreset(at: index) else { return }
         channelPresets.remove(at: index)
         if let selectedIndex = selectedPresetIndex {
             if selectedIndex == index {
@@ -273,6 +301,9 @@ class StreamViewModel: ObservableObject {
 
     func updateChannelPreset(at index: Int, url: String) {
         guard channelPresets.indices.contains(index), !channelPresetsManaged else { return }
+        // Editing the entry that is on screen would leave it describing something
+        // other than what the player is actually streaming.
+        guard !isPlayingPreset(at: index) else { return }
         channelPresets[index].url = url
         persistChannelPresets()
 
@@ -290,6 +321,7 @@ class StreamViewModel: ObservableObject {
 
     func updateChannelPresetName(at index: Int, name: String) {
         guard channelPresets.indices.contains(index), !channelPresetsManaged else { return }
+        guard !isPlayingPreset(at: index) else { return }
         channelPresets[index].name = name
         persistChannelPresets()
     }
@@ -300,17 +332,34 @@ class StreamViewModel: ObservableObject {
 
     func playStream() {
         guard let url = URL(string: streamURL) else { return }
+        playbackStoppedByUser = false
         player = AVPlayer(url: url)
         player?.play()
     }
 
     func startStreamIfNeeded() {
+        // Respect an explicit stop: without this, returning to the foreground would
+        // resurrect the player the user just dismissed.
+        guard !playbackStoppedByUser else { return }
         guard let url = URL(string: streamURL) else { return }
         player = AVPlayer(url: url)
         if isPlayingOnOpen {
             player?.play()
         }
         startRetryTimer()
+    }
+
+    /// Tears playback down. Leaving the fullscreen player only hides it — the
+    /// AVPlayer keeps running (audible), so the main screen needs a way to end it.
+    ///
+    /// Also stops the retry timer: its resume condition is `currentItem == nil`,
+    /// which a nil player satisfies, so it would otherwise rebuild the player
+    /// immediately when `autoResume` is on.
+    func stopPlayback() {
+        playbackStoppedByUser = true
+        player?.pause()
+        player = nil
+        stopRetryTimer()
     }
 
     func stopRetryTimer() {
@@ -327,8 +376,12 @@ class StreamViewModel: ObservableObject {
         guard retryTimer == nil else { return }
         retryTimer = Timer.scheduledTimer(withTimeInterval: retryTimeout, repeats: true) { _ in
             DispatchQueue.main.async {
-                // Only attempt to auto-resume if enabled
-                if self.autoResume, self.player?.currentItem == nil, let url = URL(string: self.streamURL) {
+                // Only attempt to auto-resume if enabled, and never against an
+                // explicit stop — a nil player satisfies the currentItem check below.
+                if self.autoResume,
+                   !self.playbackStoppedByUser,
+                   self.player?.currentItem == nil,
+                   let url = URL(string: self.streamURL) {
                     self.logger.log("Auto-resuming stream: \(self.streamURL)")
                     self.player = AVPlayer(url: url)
                     if self.isPlayingOnOpen {

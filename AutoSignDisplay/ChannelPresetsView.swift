@@ -10,8 +10,17 @@ import SwiftUI
 struct ChannelPresetsView: View {
     @ObservedObject var viewModel: StreamViewModel
 
+    /// Where to scroll once the Add Preset screen pops back.
+    private enum ScrollDestination: Equatable {
+        case newestPreset
+        case top
+    }
+
+    private static let topAnchor = "top"
+
     /// Index awaiting delete confirmation. Non-nil drives the confirmation alert.
     @State private var pendingDeleteIndex: Int?
+    @State private var scrollDestination: ScrollDestination?
 
     var body: some View {
         ZStack {
@@ -55,6 +64,7 @@ struct ChannelPresetsView: View {
                     .fontWeight(.semibold)
                     .padding(.bottom, ScreenMetrics.titleSpacing)
                     .accessibilityAddTraits(.isHeader)
+                    .id(Self.topAnchor)
 
                 if viewModel.channelPresetsManaged {
                     Text("Stream presets are managed by your administrator and cannot be changed here.")
@@ -67,18 +77,18 @@ struct ChannelPresetsView: View {
                 // swipe to reach; here it is one press away when the screen opens.
                 if !viewModel.channelPresetsManaged {
                     VStack(alignment: .leading, spacing: ScreenMetrics.rowSpacing) {
-                        Button {
-                            viewModel.addChannelPreset()
-                            // The new row is appended, so bring it into view —
-                            // otherwise pressing Add appears to do nothing.
-                            if let newIndex = viewModel.channelPresets.indices.last {
-                                withAnimation {
-                                    proxy.scrollTo(newIndex, anchor: .center)
-                                }
-                                AccessibilityNotification.Announcement(
-                                    "Added preset \(newIndex + 1)"
-                                ).post()
-                            }
+                        NavigationLink {
+                            AddPresetView(
+                                onSave: { name, url in
+                                    if let newIndex = viewModel.addChannelPreset(name: name, url: url) {
+                                        AccessibilityNotification.Announcement(
+                                            "Added preset \(newIndex + 1)"
+                                        ).post()
+                                    }
+                                    scrollDestination = .newestPreset
+                                },
+                                onCancel: { scrollDestination = .top }
+                            )
                         } label: {
                             RowLabel(title: "Add Preset")
                         }
@@ -101,6 +111,8 @@ struct ChannelPresetsView: View {
                         PresetGroup(
                             index: index,
                             isSelected: viewModel.selectedPresetIndex == index,
+                            isPlaying: viewModel.selectedPresetIndex == index
+                                && viewModel.player != nil,
                             preset: preset,
                             managed: viewModel.channelPresetsManaged,
                             name: nameBinding(for: index),
@@ -114,6 +126,23 @@ struct ChannelPresetsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, ScreenMetrics.horizontalPadding)
             .padding(.vertical, ScreenMetrics.verticalPadding)
+        }
+        // Applied after the Add Preset screen pops: Save lands on the new entry,
+        // Cancel returns to the top. Set from the child rather than scrolled there
+        // directly, because the proxy only exists inside this ScrollViewReader.
+        .onChangeOld(of: scrollDestination) { _, destination in
+            guard let destination else { return }
+            withAnimation {
+                switch destination {
+                case .newestPreset:
+                    if let last = viewModel.channelPresets.indices.last {
+                        proxy.scrollTo(last, anchor: .bottom)
+                    }
+                case .top:
+                    proxy.scrollTo(Self.topAnchor, anchor: .top)
+                }
+            }
+            scrollDestination = nil
         }
     }
 
@@ -174,6 +203,9 @@ struct ChannelPresetsView: View {
 private struct PresetGroup: View {
     let index: Int
     let isSelected: Bool
+    /// This preset is the one currently on screen. Blocks deletion and relabels
+    /// the marker, matching the main screen.
+    let isPlaying: Bool
     let preset: ChannelPreset
     let managed: Bool
     @Binding var name: String
@@ -185,7 +217,7 @@ private struct PresetGroup: View {
             HStack(spacing: ScreenMetrics.buttonSpacing) {
                 SectionHeader("Preset \(index + 1)")
                 if isSelected {
-                    Text("SELECTED")
+                    Text(isPlaying ? "PLAYING" : "SELECTED")
                         .font(.caption)
                         .fontWeight(.semibold)
                         .tracking(1.5)
@@ -194,11 +226,14 @@ private struct PresetGroup: View {
                 }
             }
 
+            // Locked while this preset is on screen, for the same reason the main
+            // screen locks its URL field: the text would describe something other
+            // than what is actually playing.
             LabeledTextField(
                 label: "Name",
                 placeholder: "Optional",
                 text: $name,
-                disabled: managed,
+                disabled: managed || isPlaying,
                 accessibilityLabelText: "Preset \(index + 1) name"
             )
 
@@ -206,10 +241,16 @@ private struct PresetGroup: View {
                 label: "URL",
                 placeholder: "https://example.com/stream.m3u8",
                 text: $url,
-                disabled: managed,
+                disabled: managed || isPlaying,
                 isURL: true,
                 accessibilityLabelText: "Preset \(index + 1) URL"
             )
+
+            if isPlaying {
+                Text("Stop the stream to edit this preset.")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+            }
 
             if !managed {
                 // Deliberately NOT Button(role: .destructive): tvOS renders that as a
@@ -223,9 +264,95 @@ private struct PresetGroup: View {
                 }
                 .frame(width: 420)
                 .padding(.top, ScreenMetrics.fieldSpacing)
+                // Deleting the stream that is currently on screen would leave the
+                // player running against an entry that no longer exists.
+                .disabled(isPlaying)
+                .accessibilityHint(isPlaying ? "Stop the stream to delete this preset" : "")
             }
         }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Preset \(index + 1)")
+    }
+}
+
+/// Full-screen Add Preset form, reached by a navigation push.
+///
+/// Adding used to append a blank row directly to the list, which landed
+/// off-screen below the fold and read as "nothing happened". Collecting the
+/// values first means the list only ever gains a complete entry.
+private struct AddPresetView: View {
+    let onSave: (String, String) -> Void
+    let onCancel: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var url = ""
+
+    /// A preset with no URL cannot play, so Save stays disabled until there is one.
+    /// Name is genuinely optional — the list falls back to showing the URL.
+    private var canSave: Bool {
+        !url.trimmingCharacters(in: .whitespaces).isEmpty
+    }
+
+    var body: some View {
+        ZStack {
+            ModalBackground()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: ScreenMetrics.groupSpacing) {
+                    Text("Add Preset")
+                        .font(.largeTitle)
+                        .fontWeight(.semibold)
+                        .padding(.bottom, ScreenMetrics.titleSpacing)
+                        .accessibilityAddTraits(.isHeader)
+
+                    VStack(alignment: .leading, spacing: ScreenMetrics.fieldSpacing) {
+                        SectionHeader("New Preset")
+
+                        LabeledTextField(
+                            label: "Name",
+                            placeholder: "Optional",
+                            text: $name,
+                            accessibilityLabelText: "New preset name"
+                        )
+
+                        LabeledTextField(
+                            label: "URL",
+                            placeholder: "https://example.com/stream.m3u8",
+                            text: $url,
+                            isURL: true,
+                            accessibilityLabelText: "New preset URL"
+                        )
+
+                        Text("A name is optional. Without one, the list shows the URL.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                            .padding(.top, ScreenMetrics.fieldSpacing)
+                    }
+
+                    HStack(spacing: ScreenMetrics.buttonSpacing) {
+                        Button {
+                            onSave(name.trimmingCharacters(in: .whitespaces),
+                                   url.trimmingCharacters(in: .whitespaces))
+                            dismiss()
+                        } label: {
+                            CenteredRowLabel(title: "Save")
+                        }
+                        .disabled(!canSave)
+                        .accessibilityHint(canSave ? "" : "Enter a URL first")
+
+                        Button {
+                            onCancel()
+                            dismiss()
+                        } label: {
+                            CenteredRowLabel(title: "Cancel")
+                        }
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, ScreenMetrics.horizontalPadding)
+                .padding(.vertical, ScreenMetrics.verticalPadding)
+            }
+        }
     }
 }

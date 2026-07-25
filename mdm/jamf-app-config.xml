@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AutoSignDisplay — Managed App Configuration (full reference)
+
+  Paste the contents of this file into your MDM's app-configuration field for
+  AutoSignDisplay (bundle id edu.princeton.autosigndisplay). In Jamf Pro:
+  Devices > Mobile Device Apps > AutoSignDisplay > App Configuration.
+
+  The MDM delivers this dictionary to the app as the UserDefaults key
+  com.apple.configuration.managed. Do not add that key yourself — it is the
+  wrapper the platform supplies.
+
+  Every key is optional. Omit anything you do not want to manage; the app keeps
+  its local value for those. See mdm/README.md for the key reference and for the
+  type rules that AutoSignDisplay enforces.
+-->
+<plist version="1.0">
+<dict>
+  <!-- Boolean. Start playing as soon as the app launches. The kiosk setting. -->
+  <key>PlayOnAppOpen</key>
+  <true/>
+
+  <!-- Boolean. Rebuild the player if the stream stalls or the network drops. -->
+  <key>AutoResume</key>
+  <true/>
+
+  <!-- Boolean. Lock the on-device Settings screen. Leave true for unattended
+       displays so a passer-by cannot change playback behavior. -->
+  <key>SettingsDisabled</key>
+  <true/>
+
+  <!-- Real, must be positive. Seconds to wait before retrying a stalled stream.
+       The on-device UI offers 3/5/10/15/30/60, but any positive value here is
+       honored and displayed as-is. -->
+  <key>RetryTimeout</key>
+  <real>5.0</real>
+
+  <!-- String, must be non-empty. The stream to load. In practice set
+       DefaultChannel instead and let it pick from ChannelPresets; StreamURL takes
+       precedence if both are present. -->
+  <key>StreamURL</key>
+  <string>https://stream.example.edu/lobby/index.m3u8</string>
+
+  <!-- String. The preset to select on launch. Match one of the ChannelPresets
+       URLs exactly, or the app cannot highlight the corresponding row. -->
+  <key>DefaultChannel</key>
+  <string>https://stream.example.edu/lobby/index.m3u8</string>
+
+  <!-- Array of dictionaries, maximum 20 entries. Entries past the 20th are
+       dropped. Each entry needs a URL; Name is optional and, when present, shows
+       in the app instead of the raw URL.
+
+       A flat array of <string> URLs is also accepted for older payloads — each
+       becomes a name-less preset. -->
+  <key>ChannelPresets</key>
+  <array>
+    <dict>
+      <key>Name</key>
+      <string>Lobby</string>
+      <key>URL</key>
+      <string>https://stream.example.edu/lobby/index.m3u8</string>
+    </dict>
+    <dict>
+      <key>Name</key>
+      <string>Auditorium</string>
+      <key>URL</key>
+      <string>https://stream.example.edu/auditorium/index.m3u8</string>
+    </dict>
+    <dict>
+      <key>Name</key>
+      <string>Campus News</string>
+      <key>URL</key>
+      <string>https://stream.example.edu/news/index.m3u8</string>
+    </dict>
+    <dict>
+      <!-- Name omitted: this row shows its URL. -->
+      <key>URL</key>
+      <string>https://stream.example.edu/overflow/index.m3u8</string>
+    </dict>
+  </array>
+</dict>
+</plist>

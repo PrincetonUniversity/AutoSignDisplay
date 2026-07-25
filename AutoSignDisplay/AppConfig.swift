@@ -23,8 +23,9 @@ class AppConfig {
     // Allow injecting a logger for tests. Defaults to PrintLogger.
     static func applyConfiguration(logger: Logger = PrintLogger()) {
         let defaults = UserDefaults.standard
-        let previouslyManaged = defaults.bool(forKey: ContentView.channelPresetsManagedKey)
-            || defaults.bool(forKey: ContentView.settingsPINManagedKey)
+        let presetsWereManaged = defaults.bool(forKey: ContentView.channelPresetsManagedKey)
+        let pinWasManaged = defaults.bool(forKey: ContentView.settingsPINManagedKey)
+        let previouslyManaged = presetsWereManaged || pinWasManaged
 
         defaults.set(false, forKey: ContentView.channelPresetsManagedKey)
         defaults.set(false, forKey: ContentView.settingsPINManagedKey)
@@ -57,7 +58,12 @@ class AppConfig {
         }
 
         // Validate and apply configuration
-        applyValidatedConfiguration(managedConfig, to: defaults, logger: logger)
+        applyValidatedConfiguration(
+            managedConfig,
+            to: defaults,
+            pinWasManaged: pinWasManaged,
+            logger: logger
+        )
     }
 
     // Load managed configuration from a plist file (for testing)
@@ -122,6 +128,7 @@ class AppConfig {
     private static func applyValidatedConfiguration(
         _ managedConfig: [String: Any],
         to defaults: UserDefaults,
+        pinWasManaged: Bool,
         logger: Logger
     ) {
         var sanitizedPresets: [ChannelPreset] = []
@@ -250,6 +257,14 @@ class AppConfig {
             }
         } else if managedConfig[AppConfigKeys.settingsPIN] != nil {
             logger.log("Ignored invalid SettingsPIN (must be non-empty String)")
+        } else if pinWasManaged {
+            // The payload is still here but has dropped SettingsPIN. Clear the PIN
+            // rather than letting it linger as an un-owned lock: settingsPINManaged
+            // has already been reset, so it would otherwise look like a user PIN that
+            // nobody on site knows. This is the recovery path an administrator reaches
+            // for when a device is locked out.
+            defaults.removeObject(forKey: ContentView.settingsPINKey)
+            logger.log("Cleared previously managed SettingsPIN: key absent from the new payload.")
         }
 
         // Validate and apply DisplayTitle (must be non-empty String)

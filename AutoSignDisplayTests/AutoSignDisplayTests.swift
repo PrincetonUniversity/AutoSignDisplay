@@ -784,6 +784,82 @@ struct AutoSignDisplayTests {
         #expect(defaults.object(forKey: ContentView.settingsPINKey) == nil)
     }
 
+    @Test func droppingSettingsPINFromAPayloadClearsIt() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        let presets = [["Name": "A", "URL": "https://a.example/1.m3u8"]]
+
+        // A managed PIN is in force.
+        await MainActor.run {
+            defaults.set([AppConfigKeys.settingsPIN: "4821",
+                          AppConfigKeys.channelPresets: presets],
+                         forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "4821")
+        #expect(defaults.bool(forKey: ContentView.settingsPINManagedKey) == true)
+
+        // The administrator pushes a payload that still exists but no longer carries
+        // SettingsPIN. This is the lockout-recovery path, and it must clear the PIN:
+        // settingsPINManaged is reset regardless, so a lingering value would look
+        // like a user-set PIN that nobody on site knows.
+        await MainActor.run {
+            defaults.set([AppConfigKeys.channelPresets: presets],
+                         forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.object(forKey: ContentView.settingsPINKey) == nil)
+        #expect(defaults.bool(forKey: ContentView.settingsPINManagedKey) == false)
+
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        #expect(vm.settingsLocked == false)
+        vm.stopRetryTimer()
+    }
+
+    @Test func managedPayloadOverridesAUserSetPIN() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        // A user sets a PIN on-device and forgets it.
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        await MainActor.run { vm.updateSettingsPIN("unknown-pin") }
+        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "unknown-pin")
+        vm.stopRetryTimer()
+
+        // Pushing a known PIN overrides it, which is the device-side recovery route.
+        await MainActor.run {
+            defaults.set([AppConfigKeys.settingsPIN: "0000"],
+                         forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "0000")
+
+        let recovered = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        #expect(recovered.isCorrectSettingsPIN("0000"))
+        #expect(!recovered.isCorrectSettingsPIN("unknown-pin"))
+        recovered.stopRetryTimer()
+    }
+
+    /// A user-set PIN with no MDM history is *not* cleared by a payload that omits
+    /// SettingsPIN — there is no managed flag to key off. Pinning that here so the
+    /// limitation is deliberate rather than discovered during an outage.
+    @Test func payloadWithoutPINLeavesAUserSetPINAlone() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        await MainActor.run { vm.updateSettingsPIN("user-pin") }
+        vm.stopRetryTimer()
+
+        await MainActor.run {
+            defaults.set([AppConfigKeys.channelPresets: [["Name": "A", "URL": "https://a.example/1.m3u8"]]],
+                         forKey: "com.apple.configuration.managed")
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "user-pin",
+                "Recovery requires pushing a known PIN, or reinstalling the app.")
+    }
+
     @Test func managedConfigRemovalClearsSettingsPIN() async throws {
         await resetDefaults()
         let defaults = UserDefaults.standard

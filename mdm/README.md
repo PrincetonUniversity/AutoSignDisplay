@@ -102,6 +102,40 @@ a PIN nobody on site knows.
 The prompt appears on each visit to Settings; unlocking is not remembered between
 visits.
 
+### Recovering from a forgotten PIN
+
+There is no back door, and there does not need to be: the app stores only its own
+configuration — presets, playback preferences, the title — and nothing a site would
+miss. **Reinstalling the app is a legitimate first resort.** It discards the
+preferences, PIN included, and the device picks the managed payload back up on next
+launch.
+
+For a managed fleet, two routes avoid touching the device:
+
+| Situation | Recovery |
+|---|---|
+| The PIN came from MDM | Push a payload with a known `SettingsPIN`, or one that **omits** `SettingsPIN` — omitting it clears the PIN on next launch. |
+| A user set the PIN on-device | Push a payload with a known `SettingsPIN`. It overrides the local value. |
+| Either | Delete and reinstall the app. |
+
+Note the asymmetry: a payload that omits `SettingsPIN` clears a *managed* PIN, but
+leaves a *user-set* one alone. The app only knows a PIN was administrator-owned
+because it recorded that when applying it, so there is no managed flag to act on for
+a PIN it never managed. Pushing a known PIN works in both cases, which makes it the
+reliable move if you are unsure which kind you are dealing with.
+
+When testing this against a simulator, be aware that `defaults import` plus a
+running app is a poor imitation of MDM: the app's own preference write-back can
+clobber the `com.apple.configuration.managed` key you just imported, and reads taken
+immediately after a write may catch cfprefsd mid-flush and show stale or mixed
+state. Terminate the app and re-read the container plist before trusting what you
+see:
+
+```bash
+xcrun simctl terminate <UDID> edu.princeton.autosigndisplay
+plutil -p "$(xcrun simctl get_app_container <UDID> edu.princeton.autosigndisplay data)"/Library/Preferences/edu.princeton.autosigndisplay.plist
+```
+
 ## Booleans must be `<true/>` or `<false/>`
 
 This is the one type rule worth stating outright, because the failure is silent.

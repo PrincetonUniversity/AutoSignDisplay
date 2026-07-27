@@ -78,12 +78,18 @@ one exists, `--list-teams` shows the team id and nothing else.
 
 ### Credentials
 
-**Preferred — App Store Connect API key.** Not tied to a personal Apple ID, survives
-the holder leaving the team, no 2FA prompts, and revocable on its own.
+**Preferred, if your role allows it — App Store Connect API key.** Not tied to a
+personal Apple ID, survives the holder leaving the team, no 2FA prompts, and revocable
+on its own.
 
-App Store Connect → Integrations → App Store Connect API. An **App Manager** can
-create an *Individual Key*; *Team Keys* require Admin. Either works. Download the
-`.p8` — Apple lets you download it exactly once.
+App Store Connect → Users and Access → **Integrations** → App Store Connect API.
+Download the `.p8`; Apple lets you download it exactly once.
+
+**That section is visible only to the Account Holder and Admin roles.** An App Manager
+does not see it at all — not a greyed-out control, simply absent, with only the
+in-app-purchase shared secret showing. If that is what you see, you cannot create a key
+yourself: ask an Admin for one, or use the app-specific password below, which needs no
+elevated role.
 
 ```bash
 ./scripts/appstore-bootstrap.sh \
@@ -96,8 +102,12 @@ This copies the key to `~/.appstoreconnect/private_keys/`, which is the only pla
 `altool` looks for it, and records the two non-secret ids in `scripts/appstore.env`.
 That file is gitignored; the key never enters the repo.
 
-**Fallback — Apple ID and app-specific password.** Works when you cannot get an API
-key, but ties releases to one person's Apple ID.
+**Fallback — Apple ID and app-specific password.** Ties releases to one person's
+Apple ID, but requires no role beyond the ability to upload builds, which App Manager
+has. This is the practical path for a non-Admin.
+
+Create the password at <https://appleid.apple.com> → Sign-In and Security →
+App-Specific Passwords, then:
 
 ```bash
 ./scripts/appstore-bootstrap.sh --store-password

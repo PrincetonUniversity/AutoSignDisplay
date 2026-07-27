@@ -248,11 +248,12 @@ case "$(asc_credential_mode)" in
     ;;
   none)
     fail "no credentials configured"
-    note "Preferred — App Store Connect API key (App Manager can create an individual"
-    note "key: ASC > Integrations > App Store Connect API > Individual Keys):"
+    note "App Store Connect API key — preferred, but Users and Access > Integrations"
+    note "> App Store Connect API is visible only to Account Holder and Admin. If you"
+    note "do not see that section, ask an Admin for a key, or use the password path:"
     note "  ./scripts/appstore-bootstrap.sh --api-key ~/Downloads/AuthKey_XXXX.p8 \\"
     note "      --key-id XXXX --issuer-id <uuid>"
-    note "Fallback — app-specific password tied to your Apple ID:"
+    note "App-specific password — needs no elevated role, works for App Manager:"
     note "  ./scripts/appstore-bootstrap.sh --store-password"
     ;;
 esac

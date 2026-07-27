@@ -2,24 +2,37 @@
 """
 Generate the AutoSignDisplay Apple TV app icon assets.
 
-Design: a wooden signpost with three directional signs radiating outward
-(fork-in-the-road iconography), in front of a soft blue sky gradient.
-Produces parallax layers (Back / Middle / Front) for the home-screen and
-App Store icons, both Top Shelf images, and writes the Contents.json
-manifests Xcode consumes.
+Design derives from Princeton's campus wayfinding signage (reference photographs
+in examples/, which is gitignored):
+
+  - Charcoal matte bodies, not pure black.
+  - Light grey dimensional lettering, suggested here as blank nameplates: real
+    text is illegible at icon size.
+  - Princeton orange used sparingly. On the physical blade signs it appears on
+    the end cap, which is exactly where it lands here.
+  - Fluted dark poles with a collar bracket at each blade.
+  - Crisp prism geometry — a front face plus one side face, no curves.
+
+Projection is axonometric rather than perspective: depth is a constant offset for
+every face, so nothing converges and the shapes stay readable when the icon is
+scaled to the home-screen size.
+
+The depth direction is up and to the LEFT, which matters. With the box back
+offset up-left, the visible side face is the left one — so a blade extending left
+from the pole shows its free end, which is where the orange cap lives. Offsetting
+up-right instead puts the visible face at the pole end, where the collar hides it,
+and the front face then covers the cap down to a sliver triangle.
 
 Run:
     python3 scripts/generate-icon.py [--preview]
 
-`--preview` also writes flattened composite previews to /tmp so the
-result can be eyeballed before shipping.
+`--preview` also writes flattened composites to /tmp for review.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
-import math
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFilter
@@ -33,198 +46,210 @@ STORE_ICON = (1280, 768)
 TOP_SHELF = (1920, 720)
 TOP_SHELF_WIDE = (2320, 720)
 
-# Palette
-SKY_TOP = (25, 47, 89)
-SKY_BOT = (74, 129, 183)
-POST_LIGHT = (150, 100, 60)
-POST_MID = (110, 72, 40)
-POST_DARK = (68, 45, 25)
-POST_TOP_CAP = (60, 40, 22)
-LEFT_SIGN = (232, 93, 59)      # warm red-orange
-RIGHT_SIGN = (59, 174, 93)     # fresh green
-DIAG_SIGN = (245, 200, 66)     # sunny yellow
-OUTLINE = (28, 20, 15)
-SIGN_HIGHLIGHT = (255, 255, 255, 60)
-SHADOW_RGBA = (0, 0, 0, 110)
+# Palette sampled from the signage photographs.
+SKY_TOP = (238, 235, 230)      # warm daylight stone, like campus paving
+SKY_BOTTOM = (206, 200, 192)
+BODY_FRONT = (46, 46, 49)      # charcoal blade face
+BODY_TOP = (68, 68, 73)        # same body catching light from above
+BODY_EDGE = (94, 94, 100)      # thin highlight along a lit edge
+NAMEPLATE = (198, 198, 203)    # dimensional lettering grey
+PRINCETON_ORANGE = (231, 117, 0)
+ORANGE_SHADE = (188, 92, 0)    # the cap's own shaded edge
+POLE_FRONT = (34, 34, 38)
+POLE_FLUTE = (58, 58, 64)
+SHADOW_RGBA = (60, 55, 50, 90)
 
-# Supersample factor for antialiasing
-SS = 4
+SS = 4  # supersample factor
 
 
 # ---------- primitives ----------
 
-def make_gradient(size, top_rgb, bot_rgb):
-    """Vertical linear gradient (opaque RGBA)."""
+def make_gradient(size, top_rgb, bottom_rgb):
+    """Vertical linear gradient, opaque."""
     w, h = size
     img = Image.new("RGBA", size)
     draw = ImageDraw.Draw(img)
     for y in range(h):
         t = y / max(h - 1, 1)
-        r = int(top_rgb[0] * (1 - t) + bot_rgb[0] * t)
-        g = int(top_rgb[1] * (1 - t) + bot_rgb[1] * t)
-        b = int(top_rgb[2] * (1 - t) + bot_rgb[2] * t)
-        draw.line([(0, y), (w, y)], fill=(r, g, b, 255))
+        draw.line(
+            [(0, y), (w, y)],
+            fill=(
+                int(top_rgb[0] * (1 - t) + bottom_rgb[0] * t),
+                int(top_rgb[1] * (1 - t) + bottom_rgb[1] * t),
+                int(top_rgb[2] * (1 - t) + bottom_rgb[2] * t),
+                255,
+            ),
+        )
     return img
 
 
-def make_arrow_sign(size, color, outline_w):
-    """Right-pointing pentagon on a transparent canvas.
-    Flat edge on the left (attaches to post), tip on the right.
+def draw_pole(canvas, w, h, depth):
+    """Charcoal pole, right of centre, drawn before the blades so they read as
+    mounted in front of it.
+
+    No fluting lines: at icon size they vanish into noise, and the reference
+    reads as a plain dark post from any distance.
     """
-    w, h = size
-    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    body_end = int(w * 0.72)
-    tip_x = w - 1
-    pts = [
-        (0, 0),
-        (body_end, 0),
-        (tip_x, h // 2),
-        (body_end, h - 1),
-        (0, h - 1),
-    ]
-    d.polygon(pts, fill=color, outline=OUTLINE, width=outline_w)
-    # Subtle top highlight
-    d.line([(int(w * 0.05), int(h * 0.20)),
-            (body_end - int(w * 0.05), int(h * 0.20))],
-           fill=SIGN_HIGHLIGHT, width=max(2, outline_w // 2))
-    return img
+    d = ImageDraw.Draw(canvas)
+    cx = int(w * 0.79)
+    half = int(w * 0.022)
+    top = int(h * 0.125)
+    bottom = int(h * 0.905)
+    dx, dy = depth
+
+    # Left side face, visible because the depth axis runs up-left.
+    d.polygon([(cx - half, top), (cx - half + dx, top + dy),
+               (cx - half + dx, bottom + dy), (cx - half, bottom)],
+              fill=BODY_TOP)
+    # Cap the top so the post ends as a solid rather than an open extrusion.
+    d.polygon([(cx - half, top), (cx + half, top),
+               (cx + half + dx, top + dy), (cx - half + dx, top + dy)],
+              fill=BODY_TOP)
+    d.rectangle([cx - half, top, cx + half, bottom], fill=POLE_FRONT)
+
+    # Plinth, as on the pylon bases in the photographs. Anchors the composition.
+    plinth_h = int(h * 0.055)
+    grow = int(w * 0.010)
+    d.polygon([(cx - half - grow, bottom - plinth_h),
+               (cx - half - grow + dx, bottom - plinth_h + dy),
+               (cx - half - grow + dx, bottom + dy),
+               (cx - half - grow, bottom)],
+              fill=BODY_TOP)
+    d.rectangle([cx - half - grow, bottom - plinth_h,
+                 cx + half + grow, bottom],
+                fill=POLE_FLUTE)
+    return cx, half
 
 
-def paste_with_shadow(canvas, layer, position, blur_radius, offset=(0, 0)):
-    """Paste `layer` onto `canvas` with a soft drop shadow."""
-    x, y = position
-    # Shadow: alpha of layer tinted black, blurred
-    alpha = layer.split()[-1]
-    shadow = Image.new("RGBA", layer.size, SHADOW_RGBA)
-    shadow.putalpha(alpha)
-    shadow = shadow.filter(ImageFilter.GaussianBlur(blur_radius))
-    canvas.alpha_composite(shadow, (x + offset[0], y + offset[1]))
-    canvas.alpha_composite(layer, (x, y))
+def draw_blade(canvas, x_free, x_pole, y_center, height, depth):
+    """One blade sign: top face, orange end cap, front face, lettering.
+
+    Extends left, so `x_free` is its free end — and with the depth axis running
+    up-left, that end is the visible side face. No taper: the real blades wedge
+    very slightly, but at icon size it reads as noise.
+    """
+    d = ImageDraw.Draw(canvas)
+    dx, dy = depth
+    y0 = y_center - height // 2
+    y1 = y_center + height // 2
+
+    # Top face.
+    d.polygon([(x_free, y0), (x_pole, y0),
+               (x_pole + dx, y0 + dy), (x_free + dx, y0 + dy)],
+              fill=BODY_TOP)
+
+    # End cap — the orange, on the free end, outside the front face because the
+    # depth offset is negative.
+    d.polygon([(x_free, y0), (x_free + dx, y0 + dy),
+               (x_free + dx, y1 + dy), (x_free, y1)],
+              fill=PRINCETON_ORANGE)
+    d.line([(x_free + dx, y0 + dy), (x_free + dx, y1 + dy)],
+           fill=ORANGE_SHADE, width=max(1, SS // 2))
+
+    # Front face last, covering the seams where the other faces meet it.
+    d.rectangle([x_free, y0, x_pole, y1], fill=BODY_FRONT)
+    d.line([(x_free, y0), (x_pole, y0)], fill=BODY_EDGE, width=max(1, SS // 2))
+
+    draw_lettering(d, x_free, x_pole, y_center, height)
+
+
+def draw_lettering(d, x_free, x_pole, y_center, height):
+    """Word shapes standing in for the dimensional lettering.
+
+    Blocks of uneven width scan as text at icon size, where one long bar just
+    reads as a tube.
+    """
+    inset = int((x_pole - x_free) * 0.11)
+    left = x_free + inset
+    right = x_pole - inset
+    bar_h = max(2, int(height * 0.30))
+    gap = max(2, int((right - left) * 0.06))
+
+    # Two blocks, not three: at dock size finer runs collapse into a grey smear.
+    weights = (0.42, 0.24)
+    total = sum(weights)
+    available = (right - left) - gap * (len(weights) - 1)
+
+    x = left
+    for weight in weights:
+        segment = int(available * (weight / total))
+        d.rounded_rectangle(
+            [x, y_center - bar_h // 2, x + segment, y_center + bar_h // 2],
+            radius=max(1, bar_h // 3),
+            fill=NAMEPLATE,
+        )
+        x += segment + gap
 
 
 # ---------- composition ----------
 
-def draw_post(canvas):
-    """Signpost onto a transparent RGBA canvas."""
-    w, h = canvas.size
-    d = ImageDraw.Draw(canvas)
-    post_w = int(w * 0.05)
-    center_x = w // 2
-    post_top = int(h * 0.15)
-    post_bot = int(h * 0.92)
-    outline_w = max(2, SS)
+def blade_layout(w, h):
+    """Free ends flush left and equal heights, so the orange caps stack into one
+    aligned vertical accent — the clearest read at small sizes.
 
-    # Main post face
-    d.rectangle(
-        [center_x - post_w // 2, post_top, center_x + post_w // 2, post_bot],
-        fill=POST_MID, outline=OUTLINE, width=outline_w,
-    )
-    # Left highlight strip (light)
-    hl_w = max(2, post_w // 4)
-    d.rectangle(
-        [center_x - post_w // 2 + outline_w // 2, post_top + outline_w // 2,
-         center_x - post_w // 2 + hl_w, post_bot - outline_w // 2],
-        fill=POST_LIGHT,
-    )
-    # Right shadow strip (dark)
-    d.rectangle(
-        [center_x + post_w // 2 - hl_w, post_top + outline_w // 2,
-         center_x + post_w // 2 - outline_w // 2, post_bot - outline_w // 2],
-        fill=POST_DARK,
-    )
-    # Cap on top
-    cap_h = int(h * 0.02)
-    cap_overhang = post_w // 3
-    d.rectangle(
-        [center_x - post_w // 2 - cap_overhang, post_top - cap_h,
-         center_x + post_w // 2 + cap_overhang, post_top + cap_h // 2],
-        fill=POST_TOP_CAP, outline=OUTLINE, width=outline_w,
-    )
-    # Base ground (a small mound / dirt)
-    base_h = int(h * 0.05)
-    base_w = int(post_w * 4.5)
-    d.ellipse(
-        [center_x - base_w // 2, post_bot - base_h,
-         center_x + base_w // 2, post_bot + base_h],
-        fill=POST_DARK, outline=OUTLINE, width=outline_w,
-    )
+    Proportion matters more than it looks: the physical blades are roughly 5:1,
+    and a first pass at 12:1 read as a comb rather than signage.
+    """
+    pole_cx = int(w * 0.79)
+    x_pole = pole_cx + int(w * 0.022)
+    # Gaps wider than they first seem necessary: at a tighter rhythm the three
+    # blades merged into one slab and the post never showed between them.
+    #
+    # The artwork also has to fill the frame. A first pass sat small inside wide
+    # margins and read as a server rack once shrunk into the tvOS dock.
+    height = int(h * 0.155)
+    length = int(w * 0.62)
+    centers = [int(h * f) for f in (0.26, 0.50, 0.74)]
+    return x_pole - length, x_pole, height, centers
 
 
-def draw_signs(canvas):
-    """Three directional signs onto a transparent RGBA canvas."""
-    w, h = canvas.size
-    center_x = w // 2
-    outline_w = max(2, SS)
+def render_layers(size):
+    """Return (back, middle, front) RGBA at `size`, drawn supersampled.
 
-    # Sign geometry
-    sign_w = int(w * 0.38)   # horizontal length of a sign (body + tip)
-    sign_h = int(h * 0.16)   # vertical height
-    post_w_half = int(w * 0.025)
-
-    # Top sign — pointing up-and-to-the-right (diagonal, yellow)
-    top_y_center = int(h * 0.24)
-    diag = make_arrow_sign((sign_w, sign_h), DIAG_SIGN, outline_w)
-    rotated = diag.rotate(20, resample=Image.BICUBIC, expand=True)
-    rw, rh = rotated.size
-    # anchor: near center_x + a bit right so the flat edge overlaps the post
-    tx = center_x - int(sign_w * 0.15)
-    ty = top_y_center - rh // 2
-    paste_with_shadow(canvas, rotated, (tx, ty), blur_radius=SS * 3,
-                      offset=(SS * 2, SS * 3))
-
-    # Middle sign — pointing LEFT (red)
-    mid_y_center = int(h * 0.50)
-    left = make_arrow_sign((sign_w, sign_h), LEFT_SIGN, outline_w)
-    left = left.transpose(Image.FLIP_LEFT_RIGHT)
-    lx = center_x - sign_w + post_w_half
-    ly = mid_y_center - sign_h // 2
-    paste_with_shadow(canvas, left, (lx, ly), blur_radius=SS * 3,
-                      offset=(SS * 2, SS * 3))
-
-    # Bottom sign — pointing RIGHT (green)
-    bot_y_center = int(h * 0.73)
-    right = make_arrow_sign((sign_w, sign_h), RIGHT_SIGN, outline_w)
-    rx = center_x - post_w_half
-    ry = bot_y_center - sign_h // 2
-    paste_with_shadow(canvas, right, (rx, ry), blur_radius=SS * 3,
-                      offset=(SS * 2, SS * 3))
-
-
-def compose_layers(size):
-    """Return (back, middle, front) RGBA at `size`, drawn supersampled."""
+    Split for the tvOS parallax effect: sky behind, pole in the middle, blades in
+    front, so the signage lifts off the background when the icon is focused.
+    """
     w, h = size
     sw, sh = w * SS, h * SS
+    depth = (-int(sw * 0.030), -int(sh * 0.045))
 
-    back_ss = make_gradient((sw, sh), SKY_TOP, SKY_BOT)
+    back_ss = make_gradient((sw, sh), SKY_TOP, SKY_BOTTOM)
+
     middle_ss = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
-    draw_post(middle_ss)
+    draw_pole(middle_ss, sw, sh, depth)
+
     front_ss = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
-    draw_signs(front_ss)
+    x_free, x_pole, height, centers = blade_layout(sw, sh)
+    for y_center in centers:
+        draw_blade(front_ss, x_free, x_pole, y_center, height, depth)
 
-    back = back_ss.resize(size, Image.LANCZOS)
-    middle = middle_ss.resize(size, Image.LANCZOS)
-    front = front_ss.resize(size, Image.LANCZOS)
-    return back, middle, front
+    resample = Image.LANCZOS
+    return (back_ss.resize(size, resample),
+            middle_ss.resize(size, resample),
+            front_ss.resize(size, resample))
 
 
-def compose_top_shelf(size):
-    """Flat (non-layered) top shelf image at `size`."""
+def render_flat(size, icon_aspect=None):
+    """Single flattened image. `icon_aspect` centres the artwork in a wider
+    canvas, for the Top Shelf sizes."""
     w, h = size
-    sw, sh = w * SS, h * SS
-    canvas = make_gradient((sw, sh), SKY_TOP, SKY_BOT)
-    # Draw signpost + signs onto a 5:3 sub-region centered horizontally
-    icon_w = int(sh * 5 / 3)      # match icon aspect
-    icon_h = sh
-    icon_layer = Image.new("RGBA", (icon_w, icon_h), (0, 0, 0, 0))
-    draw_post(icon_layer)
-    draw_signs(icon_layer)
-    x = (sw - icon_w) // 2
-    canvas.alpha_composite(icon_layer, (x, 0))
-    return canvas.resize(size, Image.LANCZOS)
+    if icon_aspect is None:
+        back, middle, front = render_layers(size)
+        out = back.copy()
+        out.alpha_composite(middle)
+        out.alpha_composite(front)
+        return out
+
+    canvas = make_gradient(size, SKY_TOP, SKY_BOTTOM)
+    art_w = int(h * icon_aspect)
+    _, middle, front = render_layers((art_w, h))
+    x = (w - art_w) // 2
+    canvas.alpha_composite(middle, (x, 0))
+    canvas.alpha_composite(front, (x, 0))
+    return canvas
 
 
-# ---------- manifest / IO ----------
+# ---------- manifests / IO ----------
 
 MANIFEST_TV_1X = {
     "images": [{"filename": "Content.png", "idiom": "tv", "scale": "1x"}],
@@ -249,7 +274,6 @@ TOP_SHELF_WIDE_MANIFEST = {
 
 
 def write_layer(stack_dir, layer_name, image):
-    """Drop Content.png into <stack>/<layer>.imagestacklayer/Content.imageset/."""
     imageset = stack_dir / f"{layer_name}.imagestacklayer" / "Content.imageset"
     imageset.mkdir(parents=True, exist_ok=True)
     image.save(imageset / "Content.png", "PNG")
@@ -257,28 +281,18 @@ def write_layer(stack_dir, layer_name, image):
 
 
 def write_layered_icon(stack_dir, size):
-    back, middle, front = compose_layers(size)
+    back, middle, front = render_layers(size)
     write_layer(stack_dir, "Back", back)
     write_layer(stack_dir, "Middle", middle)
     write_layer(stack_dir, "Front", front)
 
 
-def write_top_shelf(imageset_dir, base_size, filename_1x, filename_2x, manifest):
+def write_top_shelf(imageset_dir, base_size, name_1x, name_2x, manifest):
     imageset_dir.mkdir(parents=True, exist_ok=True)
-    img1 = compose_top_shelf(base_size)
-    img2 = compose_top_shelf((base_size[0] * 2, base_size[1] * 2))
-    img1.save(imageset_dir / filename_1x, "PNG")
-    img2.save(imageset_dir / filename_2x, "PNG")
+    aspect = HOME_ICON[0] / HOME_ICON[1]
+    render_flat(base_size, aspect).save(imageset_dir / name_1x, "PNG")
+    render_flat((base_size[0] * 2, base_size[1] * 2), aspect).save(imageset_dir / name_2x, "PNG")
     (imageset_dir / "Contents.json").write_text(json.dumps(manifest, indent=2) + "\n")
-
-
-def flatten(size):
-    """Composite Back+Middle+Front into a single opaque preview."""
-    back, middle, front = compose_layers(size)
-    out = back.copy()
-    out.alpha_composite(middle)
-    out.alpha_composite(front)
-    return out
 
 
 def main():
@@ -287,33 +301,25 @@ def main():
                     help="Also write flattened preview PNGs to /tmp for review")
     args = ap.parse_args()
 
-    home_stack = BRAND / "App Icon.imagestack"
-    store_stack = BRAND / "App Icon - App Store.imagestack"
-    top_shelf = BRAND / "Top Shelf Image.imageset"
-    top_shelf_wide = BRAND / "Top Shelf Image Wide.imageset"
+    print("Rendering home-screen layered icon (400x240)…")
+    write_layered_icon(BRAND / "App Icon.imagestack", HOME_ICON)
 
-    print("Rendering home-screen layered icon (400×240)…")
-    write_layered_icon(home_stack, HOME_ICON)
+    print("Rendering App Store layered icon (1280x768)…")
+    write_layered_icon(BRAND / "App Icon - App Store.imagestack", STORE_ICON)
 
-    print("Rendering App Store layered icon (1280×768)…")
-    write_layered_icon(store_stack, STORE_ICON)
-
-    print("Rendering Top Shelf (1920×720 + @2x)…")
-    write_top_shelf(top_shelf, TOP_SHELF,
+    print("Rendering Top Shelf (1920x720 + @2x)…")
+    write_top_shelf(BRAND / "Top Shelf Image.imageset", TOP_SHELF,
                     "TopShelf.png", "TopShelf@2x.png", TOP_SHELF_MANIFEST)
 
-    print("Rendering Top Shelf Wide (2320×720 + @2x)…")
-    write_top_shelf(top_shelf_wide, TOP_SHELF_WIDE,
-                    "TopShelfWide.png", "TopShelfWide@2x.png",
-                    TOP_SHELF_WIDE_MANIFEST)
+    print("Rendering Top Shelf Wide (2320x720 + @2x)…")
+    write_top_shelf(BRAND / "Top Shelf Image Wide.imageset", TOP_SHELF_WIDE,
+                    "TopShelfWide.png", "TopShelfWide@2x.png", TOP_SHELF_WIDE_MANIFEST)
 
     if args.preview:
-        home_preview = Path("/tmp/autosigndisplay_icon_home.png")
-        store_preview = Path("/tmp/autosigndisplay_icon_store.png")
-        flatten(HOME_ICON).save(home_preview)
-        flatten(STORE_ICON).save(store_preview)
-        print(f"Preview: {home_preview}")
-        print(f"Preview: {store_preview}")
+        for label, size in (("home", HOME_ICON), ("store", STORE_ICON)):
+            path = Path(f"/tmp/autosigndisplay_icon_{label}.png")
+            render_flat(size).save(path)
+            print(f"Preview: {path}")
 
     print("Done.")
 

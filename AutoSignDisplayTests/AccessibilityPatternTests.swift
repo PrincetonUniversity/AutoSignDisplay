@@ -172,10 +172,22 @@ struct AccessibilityPatternTests {
             "PresetGroup's SELECTED/PLAYING marker should stay out of accessibility."
         )
 
-        // …so the container's label has to carry the state instead. Assert against the
-        // label's own body, not the whole view: `isSelected` and `isPlaying` are stored
-        // properties here, so searching the view would match their declarations and pass
-        // even with a constant label.
+        // …so the container's label has to carry the state instead. Checking that the
+        // property *exists* is not enough — hardcoding the modifier back to
+        // "Preset \(index + 1)" leaves the property in place, unused, and a guard that
+        // only inspected the property would still pass. Assert the wiring too.
+        #expect(
+            group.contains(".accessibilityLabel(accessibilityLabel)"),
+            """
+            PresetGroup does not apply its state-dependent accessibilityLabel. A \
+            hardcoded label here makes selection inaudible even though the property \
+            below still computes one.
+            """
+        )
+
+        // Assert against the label's own body, not the whole view: `isSelected` and
+        // `isPlaying` are stored properties here, so searching the view would match
+        // their declarations and pass even with a constant label.
         guard let label = body(after: "private var accessibilityLabel: String {", in: group) else {
             Issue.record(
                 """
@@ -215,21 +227,36 @@ struct AccessibilityPatternTests {
         // On failure this screen neither pops nor moves focus; only a caption changes.
         // Every branch that sets a visible message must also announce it, or a
         // VoiceOver user pressing Done gets no signal that anything went wrong.
-        var searchRange = evaluate.startIndex..<evaluate.endIndex
+        //
+        // Scanned per branch rather than over a fixed window of characters. A window
+        // wide enough to cover a branch also reaches past its end, so deleting a
+        // failure's announcement was silently satisfied by the *success* announcement
+        // further down and the guard passed while the bug was present.
+        let lines = evaluate.split(separator: "\n", omittingEmptySubsequences: false).map(String.init)
         var assignments = 0
-        while let found = evaluate.range(of: "errorMessage = \"", range: searchRange) {
+
+        for (start, line) in lines.enumerated() where line.contains("errorMessage = \"") {
             assignments += 1
-            let end = evaluate.index(found.upperBound, offsetBy: 300, limitedBy: evaluate.endIndex)
-                ?? evaluate.endIndex
+
+            var branch = [line]
+            for next in lines[(start + 1)...] {
+                let trimmed = next.trimmingCharacters(in: .whitespaces)
+                // A closing brace ends the branch without being part of it.
+                if trimmed.hasPrefix("}") { break }
+                branch.append(next)
+                // `return` ends the branch and belongs to it.
+                if trimmed.hasPrefix("return") { break }
+            }
+
             #expect(
-                evaluate[found.upperBound..<end].contains("Announcement("),
+                branch.joined(separator: "\n").contains("Announcement("),
                 """
-                A branch of evaluate() sets a visible errorMessage without posting an \
-                announcement. The PIN editor is the one screen where leaving a \
-                VoiceOver user guessing means locking them out.
+                A branch of evaluate() sets a visible errorMessage without announcing \
+                it: \(line.trimmingCharacters(in: .whitespaces)) — the PIN editor is \
+                the one screen where leaving a VoiceOver user guessing means locking \
+                them out.
                 """
             )
-            searchRange = found.upperBound..<evaluate.endIndex
         }
 
         #expect(assignments > 0, "Expected evaluate() to still set visible error messages.")

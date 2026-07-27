@@ -89,29 +89,81 @@ project_team_id() {
     | awk -F' = ' '/^[[:space:]]+DEVELOPMENT_TEAM = /{print $2; exit}'
 }
 
-# Parses `security find-identity -v -p codesigning` on stdin into lines of
+# Parses X.509 subject lines on stdin into
 #   <team-id>\t<certificate-type>\t<organisation>
-# Example input line:
-#   1) ABC123 "Apple Distribution: Princeton University (Y3TW367T4G)"
-# Split out from the `security` call so it is testable against fixtures.
-parse_signing_identities() {
-  sed -n 's/^[[:space:]]*[0-9][0-9]*)[[:space:]]*[0-9A-F]*[[:space:]]*"\(.*\)"[[:space:]]*$/\1/p' \
-    | while IFS= read -r subject; do
-        # "Apple Distribution: Princeton University (Y3TW367T4G)"
-        local type org team
-        type="${subject%%: *}"
-        org="${subject#*: }"
-        # Trailing "(TEAMID)" — the team is the last parenthesised group.
-        team="${org##*(}"
-        team="${team%)}"
-        org="${org% (*}"
-        [[ "$team" == "$subject" ]] && continue   # no parenthesised team; skip
-        printf '%s\t%s\t%s\n' "$team" "$type" "$org"
-      done
+#
+# Input is openssl's form, one per line:
+#   subject=UID=..., CN=Apple Development: Michael Bino (KGRKWJN727), OU=Y3TW367T4G, O=Princeton University, C=US
+#
+# The team id is the **OU**, not the parenthesised value in the CN. Those agree on
+# Apple Distribution certificates but not on Apple Development ones, where the CN
+# carries a per-user identifier. Reading the CN reported two teams that do not exist
+# (3WM5YE6V3K, KGRKWJN727) and hid the one that does — the certificate above is a
+# Princeton identity that looked like a personal one.
+#
+# Takes stdin so it is testable against fixtures; see scripts/tests/appstore.bats.
+parse_identity_subjects() {
+  # The subject lines are passed as an argument, not on stdin: `python3 - <<'PY'`
+  # feeds the *script* on stdin, so sys.stdin is already spoken for and piped data
+  # never arrives. This silently produced no output at all.
+  local input
+  input="$(cat)"
+  python3 - "$input" <<'PY'
+import re, sys
+
+for line in sys.argv[1].splitlines():
+    line = line.strip()
+    if not line:
+        continue
+    line = re.sub(r'^subject=\s*', '', line)
+    # Split on commas that begin a new KEY=, so an organisation containing a comma
+    # ("Princeton University, Inc.") stays intact.
+    fields = {}
+    for part in re.split(r',\s*(?=[A-Za-z]+=)', line):
+        if '=' in part:
+            key, value = part.split('=', 1)
+            fields[key.strip()] = value.strip()
+
+    team = fields.get('OU', '')
+    org = fields.get('O', '')
+    cn = fields.get('CN', '')
+    # "Apple Development: Michael Bino (…)" -> "Apple Development"
+    cert_type = cn.split(':', 1)[0].strip() if ':' in cn else cn.strip()
+    if team and cert_type:
+        print(f"{team}\t{cert_type}\t{org}")
+PY
+}
+
+# One openssl subject line per code-signing identity in the keychain.
+#
+# find-identity lists only identities that have a private key and can sign, which is
+# the right set: a certificate whose private key lives on someone else's Mac shows in
+# Xcode but cannot sign here.
+identity_subjects() {
+  local hashes certs hash
+  hashes="$(security find-identity -v -p codesigning 2>/dev/null \
+    | sed -n 's/^[[:space:]]*[0-9][0-9]*)[[:space:]]*\([0-9A-F]\{40\}\).*/\1/p' | sort -u)"
+  [[ -n "$hashes" ]] || return 0
+
+  certs="$(mktemp -t asd-certs)"
+  security find-certificate -a -Z -p >"$certs" 2>/dev/null || true
+  while IFS= read -r hash; do
+    [[ -n "$hash" ]] || continue
+    # Blocks are "SHA-256 hash:", "SHA-1 hash:", then the PEM.
+    awk -v want="$hash" '
+      $0 ~ "SHA-1 hash: " want { found = 1 }
+      found && /-----BEGIN CERTIFICATE-----/ { capture = 1 }
+      capture { print }
+      capture && /-----END CERTIFICATE-----/ { exit }
+    ' "$certs" | openssl x509 -noout -subject 2>/dev/null
+  done <<EOF
+$hashes
+EOF
+  rm -f "$certs"
 }
 
 installed_identities() {
-  security find-identity -v -p codesigning 2>/dev/null | parse_signing_identities
+  identity_subjects | parse_identity_subjects
 }
 
 # Every distinct team id that has a signing identity installed, with its name.

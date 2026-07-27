@@ -218,13 +218,17 @@ if team_has_distribution_identity "$TEAM"; then
 else
   fail "no Apple Distribution identity for team $TEAM"
   note "An Apple Development certificate is not sufficient for App Store submission."
+  note "Note that Xcode's Manage Certificates list also shows distribution"
+  note "certificates created by colleagues, marked 'Not in Keychain'. Those cannot"
+  note "sign here — their private key is on the Mac that made them. Only a"
+  note "certificate in your own keychain counts, which is what this checks."
   note "Two ways to fix it:"
   note "  1. Xcode > Settings > Accounts > select the team > Manage Certificates >"
-  note "     + > Apple Distribution."
+  note "     + > Apple Distribution, which creates the key locally."
   note "  2. Re-run this script with --provision, which archives once with"
-  note "     -allowProvisioningUpdates and lets Xcode create the certificate and"
-  note "     profile for you. Note this consumes one of the team's two distribution"
-  note "     certificate slots, which matters on a shared team."
+  note "     -allowProvisioningUpdates and lets Xcode create it for you."
+  note "Check the existing list first: Apple caps active distribution certificates"
+  note "per team, and passing the cap means revoking a colleague's. Coordinate."
   if [[ -n "$(list_signing_teams)" ]]; then
     note "Installed identities are for these teams:"
     list_signing_teams | while IFS=$'\t' read -r t o; do note "  $t  $o"; done

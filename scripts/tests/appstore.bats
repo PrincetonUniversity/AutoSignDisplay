@@ -16,40 +16,59 @@ setup() {
   source "$REPO_ROOT/scripts/lib/appstore.sh"
 }
 
-# Two teams with a distribution cert each, plus development-only certs, which is
-# the shape of a machine signed in to both a personal and an organisation team.
+# Real subject lines from this machine, which are the shape that matters: the two
+# Apple Development certificates carry per-user identifiers in their CN
+# (3WM5YE6V3K, KGRKWJN727) while their OU names the actual team. The last one is a
+# Princeton identity that looks personal if you read the CN.
 fixture_identities() {
   cat <<'EOF'
-  1) 273475FF24FE9BDE37878FB68EE312B49156F907 "Apple Distribution: Michael Bino (W7EJE9LZ23)"
-  2) DA60E7B212999B7B7E206C24A5FAD397FE2DF0E4 "Developer ID Application: Michael Bino (W7EJE9LZ23)"
-  3) 87222E3565DF4F62E6B74476BDCF080903B96B23 "Apple Development: Michael Bino (3WM5YE6V3K)"
-  4) 1111111111111111111111111111111111111111 "Apple Distribution: Princeton University (Y3TW367T4G)"
-     4 valid identities found
+subject=UID=6S2N758UJ6, CN=Apple Distribution: Michael Bino (W7EJE9LZ23), OU=W7EJE9LZ23, O=Michael Bino, C=US
+subject=UID=6S2N758UJ6, CN=Developer ID Application: Michael Bino (W7EJE9LZ23), OU=W7EJE9LZ23, O=Michael Bino, C=US
+subject=UID=6S2N758UJ6, CN=Apple Development: Michael Bino (3WM5YE6V3K), OU=W7EJE9LZ23, O=Michael Bino, C=US
+subject=UID=6S2N758UJ6, CN=Apple Development: Michael Bino (KGRKWJN727), OU=Y3TW367T4G, O=Princeton University, C=US
 EOF
 }
 
 # ---------- identity parsing ----------
 
-@test "parses team, type and organisation from security output" {
-  run bash -c "$(declare -f fixture_identities parse_signing_identities); fixture_identities | parse_signing_identities"
+@test "the team id comes from OU, not the parenthesised value in the CN" {
+  # This is the bug: reading the CN reported teams 3WM5YE6V3K and KGRKWJN727, which
+  # are per-user identifiers and not teams at all, and reported the Princeton
+  # certificate as belonging to "Michael Bino".
+  run bash -c "$(declare -f fixture_identities parse_identity_subjects); fixture_identities | parse_identity_subjects"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"W7EJE9LZ23	Apple Distribution	Michael Bino"* ]]
-  [[ "$output" == *"Y3TW367T4G	Apple Distribution	Princeton University"* ]]
-  [[ "$output" == *"3WM5YE6V3K	Apple Development	Michael Bino"* ]]
+  [[ "$output" == *"Y3TW367T4G	Apple Development	Princeton University"* ]]
+  [[ "$output" != *"KGRKWJN727	"* ]]
+  [[ "$output" != *"3WM5YE6V3K	"* ]]
 }
 
-@test "ignores the trailing identity count line" {
-  run bash -c "$(declare -f fixture_identities parse_signing_identities); fixture_identities | parse_signing_identities"
-  [[ "$output" != *"valid identities found"* ]]
+@test "an organisation containing a comma survives field splitting" {
+  run bash -c "$(declare -f parse_identity_subjects); printf 'subject=CN=Apple Distribution: X (AAAAAAAAAA), OU=AAAAAAAAAA, O=Princeton University, Inc., C=US\n' | parse_identity_subjects"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"Princeton University, Inc."* ]]
+}
+
+@test "parses team, type and organisation from security output" {
+  run bash -c "$(declare -f fixture_identities parse_identity_subjects); fixture_identities | parse_identity_subjects"
+  [ "$status" -eq 0 ]
+  [[ "$output" == *"W7EJE9LZ23	Apple Distribution	Michael Bino"* ]]
+  [[ "$output" == *"W7EJE9LZ23	Developer ID Application	Michael Bino"* ]]
+  [[ "$output" == *"Y3TW367T4G	Apple Development	Princeton University"* ]]
+}
+
+@test "ignores blank and malformed lines" {
+  run bash -c "$(declare -f parse_identity_subjects); printf '\n     \nnot a subject at all\n' | parse_identity_subjects"
+  [ "$status" -eq 0 ]
+  [ -z "$output" ]
 }
 
 @test "handles an organisation name containing spaces" {
-  run bash -c "$(declare -f fixture_identities parse_signing_identities); fixture_identities | parse_signing_identities"
+  run bash -c "$(declare -f fixture_identities parse_identity_subjects); fixture_identities | parse_identity_subjects"
   [[ "$output" == *"Princeton University"* ]]
 }
 
 @test "produces no output when no identities are installed" {
-  run bash -c "$(declare -f parse_signing_identities); printf '     0 valid identities found\n' | parse_signing_identities"
+  run bash -c "$(declare -f parse_identity_subjects); printf '' | parse_identity_subjects"
   [ "$status" -eq 0 ]
   [ -z "$output" ]
 }
@@ -163,8 +182,8 @@ EOF
   # Three teams are called "Michael Bino" in the fixture; only W7EJE9LZ23 can sign
   # for distribution. Taking the first sorted match would pick 3WM5YE6V3K and fail
   # later with a signing error naming a team nobody asked for.
-  run bash -c "$(declare -f fixture_identities parse_signing_identities match_team_by_name); \
-    fixture_identities | parse_signing_identities | match_team_by_name 'michael bino'"
+  run bash -c "$(declare -f fixture_identities parse_identity_subjects match_team_by_name); \
+    fixture_identities | parse_identity_subjects | match_team_by_name 'michael bino'"
   [ "$status" -eq 0 ]
   [ "$output" = "W7EJE9LZ23" ]
 }
@@ -172,12 +191,12 @@ EOF
 @test "an ambiguous name with several distribution teams is refused, not guessed" {
   ambiguous() {
     cat <<'EOF'
-  1) AAAA "Apple Distribution: Princeton University (AAAAAAAAAA)"
-  2) BBBB "Apple Distribution: Princeton University Press (BBBBBBBBBB)"
+subject=CN=Apple Distribution: A (AAAAAAAAAA), OU=AAAAAAAAAA, O=Princeton University, C=US
+subject=CN=Apple Distribution: B (BBBBBBBBBB), OU=BBBBBBBBBB, O=Princeton University Press, C=US
 EOF
   }
-  run bash -c "$(declare -f ambiguous parse_signing_identities match_team_by_name); \
-    ambiguous | parse_signing_identities | match_team_by_name 'princeton'"
+  run bash -c "$(declare -f ambiguous parse_identity_subjects match_team_by_name); \
+    ambiguous | parse_identity_subjects | match_team_by_name 'princeton'"
   [ "$status" -ne 0 ]
   [ -z "$output" ]
 }
@@ -185,9 +204,9 @@ EOF
 @test "a name matching one development-only team still resolves" {
   # No distribution cert, but unambiguous — let it through so the caller can raise
   # the specific 'no distribution identity' error instead of a confusing name error.
-  run bash -c "$(declare -f parse_signing_identities match_team_by_name); \
-    printf '  1) AA \"Apple Development: Solo Team (CCCCCCCCCC)\"\n' \
-    | parse_signing_identities | match_team_by_name 'solo'"
+  run bash -c "$(declare -f parse_identity_subjects match_team_by_name); \
+    printf 'subject=CN=Apple Development: X (ZZZZZZZZZZ), OU=CCCCCCCCCC, O=Solo Team, C=US\n' \
+    | parse_identity_subjects | match_team_by_name 'solo'"
   [ "$status" -eq 0 ]
   [ "$output" = "CCCCCCCCCC" ]
 }

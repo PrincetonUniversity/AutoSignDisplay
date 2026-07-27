@@ -52,17 +52,25 @@ To see what you have:
 ./scripts/appstore-bootstrap.sh --list-teams
 ```
 
+**A certificate someone else created is not usable here.** Xcode's Manage
+Certificates list shows every distribution certificate on the team, including ones
+created by colleagues, marked **Not in Keychain**. Those cannot sign on this machine:
+the private key stays on the Mac that generated it, and a certificate without its
+private key is inert. Only an entry that is *in* your keychain counts, which is
+exactly what `--list-teams` reports.
+
 Two ways to get one:
 
 - **Xcode** → Settings → Accounts → select the team → Manage Certificates → **+** →
-  Apple Distribution.
+  Apple Distribution. This creates a new certificate with its private key locally.
 - **`./scripts/appstore-bootstrap.sh --provision`**, which archives once with
   `-allowProvisioningUpdates` and lets Xcode create the certificate and profile.
 
-Prefer the Xcode route on a shared team. Apple caps a team at **two** active
-distribution certificates, and creating one from a script is how a team ends up
-locked out of creating any more. Check with whoever administers the Princeton team
-before minting one.
+Prefer the Xcode route on a shared team, and check the existing list first. Apple caps
+the number of active distribution certificates per team; if the team is already at the
+cap, creating another means revoking someone else's, which breaks whatever they sign
+with it. Coordinate before revoking anything. The alternative is asking a colleague to
+export their certificate and private key as a `.p12` and importing that instead.
 
 A note on team names: Xcode's account list is not exposed to any command-line tool,
 so these scripts can only learn a team's *name* from an installed certificate. Until

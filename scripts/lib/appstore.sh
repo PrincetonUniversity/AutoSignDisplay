@@ -134,19 +134,38 @@ for line in sys.argv[1].splitlines():
 PY
 }
 
+# Keychain to inspect and import into. Defaults to the login keychain; ASD_KEYCHAIN
+# overrides it, which CI needs so a run can import into a temporary keychain instead
+# of a user's.
+default_keychain() {
+  printf '%s' "${ASD_KEYCHAIN:-$HOME/Library/Keychains/login.keychain-db}"
+}
+
 # One openssl subject line per code-signing identity in the keychain.
 #
 # find-identity lists only identities that have a private key and can sign, which is
 # the right set: a certificate whose private key lives on someone else's Mac shows in
 # Xcode but cannot sign here.
 identity_subjects() {
-  local hashes certs hash
-  hashes="$(security find-identity -v -p codesigning 2>/dev/null \
-    | sed -n 's/^[[:space:]]*[0-9][0-9]*)[[:space:]]*\([0-9A-F]\{40\}\).*/\1/p' | sort -u)"
+  local hashes certs hash kc="${ASD_KEYCHAIN:-}"
+  # An explicit keychain is passed positionally; with none, security searches the
+  # default list. Branching rather than an array because "${arr[@]}" on an empty
+  # array trips `set -u` under bash 3.2.
+  if [[ -n "$kc" ]]; then
+    hashes="$(security find-identity -v -p codesigning "$kc" 2>/dev/null \
+      | sed -n 's/^[[:space:]]*[0-9][0-9]*)[[:space:]]*\([0-9A-F]\{40\}\).*/\1/p' | sort -u)"
+  else
+    hashes="$(security find-identity -v -p codesigning 2>/dev/null \
+      | sed -n 's/^[[:space:]]*[0-9][0-9]*)[[:space:]]*\([0-9A-F]\{40\}\).*/\1/p' | sort -u)"
+  fi
   [[ -n "$hashes" ]] || return 0
 
   certs="$(mktemp -t asd-certs)"
-  security find-certificate -a -Z -p >"$certs" 2>/dev/null || true
+  if [[ -n "$kc" ]]; then
+    security find-certificate -a -Z -p "$kc" >"$certs" 2>/dev/null || true
+  else
+    security find-certificate -a -Z -p >"$certs" 2>/dev/null || true
+  fi
   while IFS= read -r hash; do
     [[ -n "$hash" ]] || continue
     # Blocks are "SHA-256 hash:", "SHA-1 hash:", then the PEM.
@@ -164,6 +183,17 @@ EOF
 
 installed_identities() {
   identity_subjects | parse_identity_subjects
+}
+
+# Identity lines present in `after` but not `before`, both being
+# parse_identity_subjects output. Reports exactly what an import added, which is the
+# only reliable way to tell a .p12 that carried a private key from one that did not:
+# a certificate-only .p12 imports cleanly and silently yields nothing signable.
+identities_gained() {
+  local before="$1" after="$2"
+  comm -13 \
+    <(printf '%s\n' "$before" | sed '/^$/d' | sort -u) \
+    <(printf '%s\n' "$after" | sed '/^$/d' | sort -u)
 }
 
 # Every distinct team id that has a signing identity installed, with its name.

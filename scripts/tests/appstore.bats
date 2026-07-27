@@ -241,6 +241,67 @@ EOF
   [ "$ASC_PLATFORM" = "appletvos" ]
 }
 
+# ---------- importing a signing identity ----------
+
+# Note on coverage: the import itself is not exercised end to end. macOS will not
+# treat a self-signed certificate as a *valid* code-signing identity, so a synthetic
+# .p12 never registers and there is nothing to assert against. What is testable is
+# the reporting logic that decides whether an import actually produced something
+# signable, plus the argument handling — so those are separated out and covered here.
+
+@test "identities_gained reports only what the import added" {
+  before="$(printf 'W7EJE9LZ23\tApple Distribution\tMichael Bino')"
+  after="$(printf 'W7EJE9LZ23\tApple Distribution\tMichael Bino\nY3TW367T4G\tApple Distribution\tPrinceton University')"
+  run identities_gained "$before" "$after"
+  [ "$status" -eq 0 ]
+  [ "$output" = "$(printf 'Y3TW367T4G\tApple Distribution\tPrinceton University')" ]
+}
+
+@test "identities_gained reports nothing for a certificate-only p12" {
+  # The failure that matters: a .p12 with no private key imports cleanly and adds no
+  # signable identity. Silence here is what triggers the warning.
+  same="$(printf 'W7EJE9LZ23\tApple Distribution\tMichael Bino')"
+  run identities_gained "$same" "$same"
+  [ -z "$output" ]
+}
+
+@test "identities_gained copes with an empty starting keychain" {
+  run identities_gained "" "$(printf 'Y3TW367T4G\tApple Distribution\tPrinceton University')"
+  [[ "$output" == *"Princeton University"* ]]
+}
+
+@test "--import-p12 rejects a missing file before touching the keychain" {
+  run "$REPO_ROOT/scripts/appstore-bootstrap.sh" --import-p12 /definitely/not/here.p12
+  [ "$status" -ne 0 ]
+  [[ "$output" == *"no such file"* ]]
+}
+
+@test "--import-p12 requires a path" {
+  run "$REPO_ROOT/scripts/appstore-bootstrap.sh" --import-p12
+  [ "$status" -ne 0 ]
+}
+
+@test "the import never passes the passphrase on the command line" {
+  # -P would put the .p12 passphrase in the process list, readable by any local
+  # user. security itself warns against it; omitting it prompts securely instead.
+  run "$REPO_ROOT/scripts/appstore-bootstrap.sh" --import-p12 "$REPO_ROOT/README.md" --dry-run
+  [[ "$output" == *"DRY: security import"* ]]
+  [[ "$output" != *" -P "* ]]
+  # -A would let any process on the machine sign; only codesign and security should.
+  [[ "$output" != *" -A"* ]]
+  [[ "$output" == *"-T /usr/bin/codesign"* ]]
+}
+
+@test "the keychain target is overridable for CI" {
+  ASD_KEYCHAIN="/tmp/asd-test.keychain"
+  export ASD_KEYCHAIN
+  run default_keychain
+  [ "$output" = "/tmp/asd-test.keychain" ]
+  unset ASD_KEYCHAIN
+  run default_keychain
+  [[ "$output" == *"login.keychain-db"* ]]
+}
+
 # ---------- scripts as a whole ----------
 
 @test "both scripts are executable and offer --help" {

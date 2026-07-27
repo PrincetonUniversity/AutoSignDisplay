@@ -24,6 +24,7 @@ API_KEY_PATH=""
 KEY_ID=""
 ISSUER_ID=""
 STORE_PASSWORD=0
+P12_PATH=""
 LIST_TEAMS=0
 PROVISION=0
 
@@ -35,6 +36,10 @@ appstore-bootstrap.sh — check and set up everything needed to submit to App St
   ./scripts/appstore-bootstrap.sh --list-teams     List signing teams found locally.
   ./scripts/appstore-bootstrap.sh --provision      Archive once so Xcode creates the
                                                    distribution certificate and profile.
+  ./scripts/appstore-bootstrap.sh --import-p12 <path.p12>
+                                                   Install a signing identity exported
+                                                   by a colleague, and verify it can
+                                                   actually sign.
 
 Installing credentials (pick one):
   --api-key <path.p8> --key-id <id> --issuer-id <uuid>
@@ -60,6 +65,7 @@ while [[ $# -gt 0 ]]; do
     --key-id)          KEY_ID="${2:?--key-id needs a value}"; shift 2 ;;
     --issuer-id)       ISSUER_ID="${2:?--issuer-id needs a value}"; shift 2 ;;
     --store-password)  STORE_PASSWORD=1; shift ;;
+    --import-p12)      P12_PATH="${2:?--import-p12 needs a path}"; shift 2 ;;
     --list-teams)      LIST_TEAMS=1; shift ;;
     --provision)       PROVISION=1; shift ;;
     --dry-run)         DRY_RUN=1; shift ;;
@@ -96,6 +102,43 @@ if [[ "$LIST_TEAMS" -eq 1 ]]; then
   echo
   echo "The project builds for team: $(project_team_id)"
   exit 0
+fi
+
+# ---------- signing identity import ----------
+
+if [[ -n "$P12_PATH" ]]; then
+  section "Importing a signing identity"
+  [[ -f "$P12_PATH" ]] || die "no such file: $P12_PATH"
+
+  IMPORT_KEYCHAIN="$(default_keychain)"
+  IDENTITIES_BEFORE="$(installed_identities)"
+
+  log "importing into $IMPORT_KEYCHAIN"
+  # No -P. Omitting it makes security prompt in a secure dialog; passing the
+  # passphrase as an argument would expose it in the process list to every local
+  # user, and `security` itself warns that -P is insecure.
+  #
+  # -T grants codesign and security access to the key without a prompt on each use.
+  # Deliberately not -A, which would let any process on the machine sign as Princeton.
+  run_cmd security import "$P12_PATH" \
+    -k "$IMPORT_KEYCHAIN" \
+    -T /usr/bin/codesign \
+    -T /usr/bin/security
+
+  if [[ "$DRY_RUN" -eq 0 ]]; then
+    GAINED="$(identities_gained "$IDENTITIES_BEFORE" "$(installed_identities)")"
+    if [[ -z "$GAINED" ]]; then
+      warn "import completed but no new signing identity appeared."
+      warn "The usual cause is a .p12 holding only a certificate, with no private"
+      warn "key: it imports cleanly and yields nothing signable. Ask for it to be"
+      warn "re-exported from Keychain Access > My Certificates — the Certificates"
+      warn "category exports the certificate alone."
+    else
+      printf '%s\n' "$GAINED" | while IFS="$(printf '\t')" read -r t ty o; do
+        [[ -n "$t" ]] && log "installed: $ty for $t${o:+ ($o)}"
+      done
+    fi
+  fi
 fi
 
 # ---------- credential installation ----------

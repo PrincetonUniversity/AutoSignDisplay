@@ -59,7 +59,30 @@ the private key stays on the Mac that generated it, and a certificate without it
 private key is inert. Only an entry that is *in* your keychain counts, which is
 exactly what `--list-teams` reports.
 
-Two ways to get one:
+### Importing a certificate someone else exported
+
+Because distribution certificates are team-scoped and capped, the normal way onto a
+team that is already at its limit is for a colleague to export theirs and send you the
+`.p12`:
+
+```bash
+./scripts/appstore-bootstrap.sh --import-p12 ~/Downloads/princeton-dist.p12
+```
+
+It prompts for the passphrase in a secure dialog rather than taking it as an argument,
+which would put the secret in the process list. It grants access to `codesign` and
+`security` only, not every process on the machine. And it diffs the keychain before
+and after, so a `.p12` containing only a certificate — which imports perfectly
+cleanly and leaves you no closer to signing — is reported rather than mistaken for
+success. If that happens, ask for it to be re-exported from Keychain Access →
+**My Certificates**; the Certificates category exports the certificate alone.
+
+`ASD_KEYCHAIN` overrides the target keychain, which is what CI wants so a run imports
+into a temporary keychain rather than a user's login keychain.
+
+### Creating your own
+
+Two ways:
 
 - **Xcode** → Settings → Accounts → select the team → Manage Certificates → **+** →
   Apple Distribution. This creates a new certificate with its private key locally.

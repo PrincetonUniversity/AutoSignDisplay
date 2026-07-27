@@ -6,23 +6,20 @@ Design derives from Princeton's campus wayfinding signage (reference photographs
 in examples/, which is gitignored):
 
   - Charcoal matte bodies, not pure black.
-  - Light grey dimensional lettering, suggested here as blank nameplates: real
-    text is illegible at icon size.
-  - Princeton orange used sparingly. On the physical blade signs it appears on
-    the end cap, which is exactly where it lands here.
-  - Fluted dark poles with a collar bracket at each blade.
-  - Crisp prism geometry — a front face plus one side face, no curves.
+  - Princeton orange used sparingly. On the physical blade signs it appears at the
+    squared-off end, which is where the stripe lands here.
+  - Dark poles, blades mounted across them.
+  - Crisp geometry — straight edges, no curves.
 
-Projection is axonometric rather than perspective: depth is a constant offset for
-every face, so nothing converges and the shapes stay readable when the icon is
-scaled to the home-screen size.
+The blades are flat: a charcoal pentagon and an orange stripe, nothing else. The
+pole alone keeps its extrusion, offset up and to the left. That mix is deliberate,
+and it also buys something: while the blades were extruded, only their left end
+face was ever visible, so the orange stripe had to sit on the left and every arrow
+was forced to point right. Flat blades have no hidden side, so a blade can be
+mirrored to point the other way and keep its stripe. The middle one is.
 
-The depth direction is up and to the LEFT, which matters. Only the left end face
-and the top face are visible under that offset; the right end is always occluded
-by the body. So the flat orange cap has to sit on a blade's left end, and the
-arrow therefore points right. Blades fan across different angles to read as
-pointing different ways — mirroring one to point left would put its cap on the
-hidden side and lose the orange entirely.
+The pole's extrusion is axonometric rather than perspective — depth is a constant
+offset, so nothing converges and the shape survives being scaled down.
 
 Run:
     python3 scripts/generate-icon.py [--preview]
@@ -52,14 +49,10 @@ TOP_SHELF_WIDE = (2320, 720)
 SKY_TOP = (238, 235, 230)      # warm daylight stone, like campus paving
 SKY_BOTTOM = (206, 200, 192)
 BODY_FRONT = (46, 46, 49)      # charcoal blade face
-BODY_TOP = (68, 68, 73)        # same body catching light from above
-BODY_EDGE = (94, 94, 100)      # thin highlight along a lit edge
-NAMEPLATE = (198, 198, 203)    # dimensional lettering grey
+BODY_TOP = (68, 68, 73)        # the pole's side face, catching light from above
 PRINCETON_ORANGE = (231, 117, 0)
-ORANGE_SHADE = (188, 92, 0)    # the cap's own shaded edge
 POLE_FRONT = (34, 34, 38)
 POLE_FLUTE = (58, 58, 64)
-SHADOW_RGBA = (60, 55, 50, 90)
 
 SS = 4  # supersample factor
 
@@ -136,92 +129,67 @@ def rotate_points(points, degrees, origin):
     ]
 
 
-def offset(points, depth):
-    dx, dy = depth
-    return [(x + dx, y + dy) for x, y in points]
+def draw_blade(canvas, center, half_len, half_height, degrees, flip=False):
+    """One flat double-ended blade, crossed by the pole at its midpoint.
 
+    Squared end carries an orange stripe; the far end is an arrow point. The arrow
+    is part of the pentagon silhouette rather than an applied shape, so it holds up
+    when the icon is scaled down. The face is otherwise bare.
 
-def draw_blade(canvas, center, half_len, half_height, degrees, depth):
-    """One double-ended blade, crossed by the post at its midpoint.
-
-    Flat end on the left, carrying the orange cap; arrow point on the right. The
-    body is a pentagon, so the arrow is part of the silhouette rather than an
-    applied decoration.
+    `flip` mirrors the blade about its own midpoint, swapping which end points. It
+    is a plain sign flip on the local x coordinates: with no extrusion there is no
+    hidden face to worry about, so a mirrored blade keeps its stripe.
     """
     d = ImageDraw.Draw(canvas)
     cx, cy = center
     arrow = int(half_height * 1.7)
+    stripe = max(2, int(half_height * 0.42))
+    s = -1 if flip else 1
 
-    front = rotate_points([
-        (cx - half_len, cy - half_height),
-        (cx + half_len - arrow, cy - half_height),
-        (cx + half_len, cy),
-        (cx + half_len - arrow, cy + half_height),
-        (cx - half_len, cy + half_height),
-    ], degrees, center)
+    def place(local):
+        return rotate_points([(cx + s * x, cy + y) for x, y in local], degrees, center)
 
-    # Upper silhouette: flat top run, then the arrow's leading bevel.
-    upper = [front[0], front[1], front[2]]
-    d.polygon(upper + list(reversed(offset(upper, depth))), fill=BODY_TOP)
+    d.polygon(place([
+        (-half_len, -half_height),
+        (half_len - arrow, -half_height),
+        (half_len, 0),
+        (half_len - arrow, half_height),
+        (-half_len, half_height),
+    ]), fill=BODY_FRONT)
 
-    # Flat end cap — the orange, on the visible side.
-    cap = [front[0], front[4]]
-    d.polygon([cap[0]] + offset(cap, depth) + [cap[1]], fill=PRINCETON_ORANGE)
-
-    # Front face last, covering the seams where the other faces meet it.
-    d.polygon(front, fill=BODY_FRONT)
-    d.line([front[0], front[1]], fill=BODY_EDGE, width=max(1, SS // 2))
-    d.line([front[1], front[2]], fill=BODY_EDGE, width=max(1, SS // 2))
-
-    draw_lettering(d, center, half_len, half_height, arrow, degrees)
-
-
-def draw_lettering(d, center, half_len, half_height, arrow, degrees):
-    """Word shapes standing in for the dimensional lettering.
-
-    Drawn as rotated quads rather than rounded rectangles: Pillow cannot rotate a
-    rounded rectangle, and at icon size the corner radius is invisible anyway.
-    """
-    cx, cy = center
-    left = cx - half_len + int(half_len * 0.22)
-    right = cx + half_len - arrow - int(half_len * 0.14)
-    if right <= left:
-        return
-
-    bar_h = max(2, int(half_height * 0.52))
-    gap = max(2, int((right - left) * 0.09))
-    weights = (0.38, 0.22)
-    total = sum(weights)
-    available = (right - left) - gap * (len(weights) - 1)
-
-    x = left
-    for weight in weights:
-        segment = int(available * (weight / total))
-        quad = [(x, cy - bar_h // 2), (x + segment, cy - bar_h // 2),
-                (x + segment, cy + bar_h // 2), (x, cy + bar_h // 2)]
-        d.polygon(rotate_points(quad, degrees, center), fill=NAMEPLATE)
-        x += segment + gap
+    # Stripe across the squared end, spanning the blade's full height. It reads as
+    # vertical because it tilts with the blade, the way a painted end would.
+    d.polygon(place([
+        (-half_len, -half_height),
+        (-half_len + stripe, -half_height),
+        (-half_len + stripe, half_height),
+        (-half_len, half_height),
+    ]), fill=PRINCETON_ORANGE)
 
 
 # ---------- composition ----------
 
 def blade_layout(w, h):
-    """Blades crossed by the post at their midpoints, tilted slightly apart.
+    """Blades crossed by the pole at their midpoints, tilted slightly apart.
+
+    The middle blade is mirrored, so the three point up-right, up-left, and
+    down-right — three directions rather than one fanned out.
 
     Two proportions are load-bearing:
 
     - Length to height. The physical blades are roughly 5:1; a first pass at 12:1
-      read as a comb. Shortening the blades is the way to keep that ratio — thinning
-      them instead brings the comb back and mushes the lettering at dock size.
+      read as a comb. Shortening the blades is the way to keep that ratio; thinning
+      them instead brings the comb back.
     - Tilt. Enough to read as askew, little enough that the blades clear one another.
       At 13 degrees the fan collided on the left, where the upward-tilted blade's low
-      end meets the next blade's high end, and the overlap buried the post.
+      end meets the next blade's high end, and the overlap buried the pole.
     """
     cx = int(w * 0.50)
     half_height = int(h * 0.065)
     return [
         {"center": (cx, int(h * 0.25)), "half_len": int(w * 0.260), "degrees": -6.5},
-        {"center": (cx, int(h * 0.50)), "half_len": int(w * 0.285), "degrees": 2.0},
+        {"center": (cx, int(h * 0.50)), "half_len": int(w * 0.285), "degrees": 2.0,
+         "flip": True},
         {"center": (cx, int(h * 0.75)), "half_len": int(w * 0.240), "degrees": 6.5},
     ], half_height
 
@@ -245,7 +213,7 @@ def render_layers(size):
     blades, half_height = blade_layout(sw, sh)
     for blade in blades:
         draw_blade(front_ss, blade["center"], blade["half_len"],
-                   half_height, blade["degrees"], depth)
+                   half_height, blade["degrees"], blade.get("flip", False))
 
     resample = Image.LANCZOS
     return (back_ss.resize(size, resample),

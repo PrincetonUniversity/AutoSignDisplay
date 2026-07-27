@@ -1,219 +1,115 @@
 # Releasing AutoSignDisplay
 
-Two scripts, both in `scripts/`:
+Releases go through **Xcode Cloud**. Apple builds, signs, and delivers to App Store
+Connect; nothing is signed on a developer's machine.
 
-| Script | Use |
+## Why this route
+
+The Princeton team is at Apple's cap for Apple Distribution certificates. All three
+belong to other people or to automation, and Apple never releases a private key — the
+portal holds only the public certificate, so no role, not even Account Holder, can
+hand one over. Freeing a slot needs an Admin.
+
+Xcode Cloud sidesteps that entirely: it signs on Apple's infrastructure with assets
+Apple manages. Nobody here needs a distribution certificate.
+
+## The record
+
+| | |
 |---|---|
-| `appstore-bootstrap.sh` | Check prerequisites and install credentials. Run once, re-run any time — it changes nothing unless you ask it to. |
-| `release.sh` | Archive, export, validate, upload. Run for every build. |
+| Bundle identifier | `edu.princeton.autosigndisplay` |
+| App Store Connect Apple ID | `6757710459` |
+| Team | `Y3TW367T4G` (Princeton University) |
+| Version being submitted | 1.0 |
 
-The App Store Connect record already exists (bundle id `edu.princeton.autosigndisplay`,
-Apple ID `6757710459`). Uploads attach to it automatically by bundle id — there is no
-"associate" step.
+Builds attach to the record automatically by bundle identifier.
 
-## What these scripts do and do not do
+## Prerequisites already satisfied
 
-They get a **validated build into the App Store Connect record**. They do **not**
-submit for review.
+- **Shared scheme.** `AutoSignDisplay.xcscheme` is committed under
+  `xcshareddata/xcschemes`. Xcode Cloud cannot see a scheme that is not shared, and
+  this is the most common reason a first workflow finds nothing to build.
+- **No external dependencies.** No Swift Package Manager references, so there is no
+  resolution step and no `ci_scripts/ci_post_clone.sh` to write.
+- **Automatic signing** with `DEVELOPMENT_TEAM = Y3TW367T4G`, which is what Xcode
+  Cloud expects.
 
-That boundary is deliberate. Submitting for review means writing to the version
-record — release notes, screenshots, export compliance, the review submission itself
-— and you have already filled that in through the web forms. Uploading a build is
-idempotent and safe to retry; submitting for review is neither. So the last two
-clicks stay manual:
+## Creating the workflow
+
+Workflows are configured in **Xcode → Product → Xcode Cloud → Manage Workflows**, or
+on the app's Xcode Cloud tab in App Store Connect.
+
+1. Connect the source repository and grant Xcode Cloud access.
+2. **Start condition** — a tag pattern such as `v*` suits this better than every push
+   to `main`, since a release should be an explicit act.
+3. **Actions**
+   - *Test* — scheme `AutoSignDisplay`, a tvOS simulator destination.
+   - *Archive* — platform tvOS, deployment preparation **App Store Connect**.
+4. **Post-action** — TestFlight, or App Store Connect distribution.
+
+## What is and is not version-controlled
+
+Worth being clear about, given the intent to run this GitOps-style:
+
+- **Workflow configuration is not in the repo.** Start conditions, actions, and
+  environment live in App Store Connect and are edited through a UI. There is no file
+  to review, diff, or roll back.
+- **`ci_scripts/` is in the repo.** Xcode Cloud runs `ci_post_clone.sh`,
+  `ci_pre_xcodebuild.sh`, and `ci_post_xcodebuild.sh` from a `ci_scripts` directory
+  beside the Xcode project, when present. That is the only part of the pipeline that
+  is version-controlled.
+
+This project has no `ci_scripts/` because it needs none. Add one only when there is
+real work for it to do.
+
+## Build numbers
+
+Xcode Cloud exposes `CI_BUILD_NUMBER` and increments it per run. **Confirm on the
+first archive that the build number actually reaches the uploaded binary.** If App
+Store Connect reports a build number you did not expect, the fix is a
+`ci_pre_xcodebuild.sh` that writes `CI_BUILD_NUMBER` into the build settings.
+
+The version string is `MARKETING_VERSION` in the project, currently `1.0`. It must
+match the App Store Connect version record or the upload is rejected.
+
+## Submitting for review
+
+Xcode Cloud delivers a build. It does not submit for review. Once the build finishes
+processing:
 
 1. <https://appstoreconnect.apple.com> → My Apps → AutoSignDisplay
-2. On the version page, **Build** → select the build you just uploaded
+2. On the version page, **Build** → select the build
 3. **Add for Review** / **Submit**
 
-If you later want that automated too, it is App Store Connect API calls against
-`appStoreVersions` and `appStoreVersionSubmissions`, and it belongs behind an explicit
-flag.
+## If the Test action hangs
 
-## First run
+A known trap in this project: `xcodebuild` spawns cloned simulators when parallel
+testing is enabled, and tvOS runs can hang at the home screen rather than fail.
+Locally this is handled with `-parallel-testing-enabled NO`. If an Xcode Cloud test
+action hangs, disable parallel testing in the test action's settings before looking
+anywhere else.
 
-```bash
-./scripts/appstore-bootstrap.sh
-```
+## Local verification
 
-It prints an `ok` / `FAIL` line per prerequisite with remediation for each failure.
-Expect two failures on a fresh machine — a missing distribution certificate and
-missing credentials. Both are covered below.
-
-### Distribution certificate
-
-App Store submission needs an **Apple Distribution** certificate for the signing
-team. An *Apple Development* certificate for the same team is not enough, which is a
-common way to lose an hour: the archive succeeds and the export fails at the end.
-
-To see what you have:
+Xcode Cloud replaces local archiving, but the simulator scripts remain the way to
+check a change before pushing:
 
 ```bash
-./scripts/appstore-bootstrap.sh --list-teams
+./scripts/run-tests.sh              # full suite against a tvOS simulator
+./scripts/run-tests.sh --managed    # exercise the MDM path
+./scripts/run.sh                    # build, install, launch
 ```
 
-**A certificate someone else created is not usable here.** Xcode's Manage
-Certificates list shows every distribution certificate on the team, including ones
-created by colleagues, marked **Not in Keychain**. Those cannot sign on this machine:
-the private key stays on the Mac that generated it, and a certificate without its
-private key is inert. Only an entry that is *in* your keychain counts, which is
-exactly what `--list-teams` reports.
+## If Xcode Cloud turns out not to be an option
 
-### Importing a certificate someone else exported
-
-Because distribution certificates are team-scoped and capped, the normal way onto a
-team that is already at its limit is for a colleague to export theirs and send you the
-`.p12`:
+Local build-and-upload scripts existed and were removed when this route was chosen.
+They handled archive, export, `altool` validation and upload, with an `--import-p12`
+path for an externally supplied signing identity. Recover them with:
 
 ```bash
-./scripts/appstore-bootstrap.sh --import-p12 ~/Downloads/princeton-dist.p12
+git log --oneline --diff-filter=D -- scripts/release.sh
+git revert <the commit that removed them>
 ```
 
-It prompts for the passphrase in a secure dialog rather than taking it as an argument,
-which would put the secret in the process list. It grants access to `codesign` and
-`security` only, not every process on the machine. And it diffs the keychain before
-and after, so a `.p12` containing only a certificate — which imports perfectly
-cleanly and leaves you no closer to signing — is reported rather than mistaken for
-success. If that happens, ask for it to be re-exported from Keychain Access →
-**My Certificates**; the Certificates category exports the certificate alone.
-
-`ASD_KEYCHAIN` overrides the target keychain, which is what CI wants so a run imports
-into a temporary keychain rather than a user's login keychain.
-
-### Creating your own
-
-Two ways:
-
-- **Xcode** → Settings → Accounts → select the team → Manage Certificates → **+** →
-  Apple Distribution. This creates a new certificate with its private key locally.
-- **`./scripts/appstore-bootstrap.sh --provision`**, which archives once with
-  `-allowProvisioningUpdates` and lets Xcode create the certificate and profile.
-
-Prefer the Xcode route on a shared team, and check the existing list first. Apple caps
-the number of active distribution certificates per team; if the team is already at the
-cap, creating another means revoking someone else's, which breaks whatever they sign
-with it. Coordinate before revoking anything. The alternative is asking a colleague to
-export their certificate and private key as a `.p12` and importing that instead.
-
-A note on team names: Xcode's account list is not exposed to any command-line tool,
-so these scripts can only learn a team's *name* from an installed certificate. Until
-one exists, `--list-teams` shows the team id and nothing else.
-
-### Credentials
-
-**Preferred, if your role allows it — App Store Connect API key.** Not tied to a
-personal Apple ID, survives the holder leaving the team, no 2FA prompts, and revocable
-on its own.
-
-App Store Connect → Users and Access → **Integrations** → App Store Connect API.
-Download the `.p8`; Apple lets you download it exactly once.
-
-**That section is visible only to the Account Holder and Admin roles.** An App Manager
-does not see it at all — not a greyed-out control, simply absent, with only the
-in-app-purchase shared secret showing. If that is what you see, you cannot create a key
-yourself: ask an Admin for one, or use the app-specific password below, which needs no
-elevated role.
-
-```bash
-./scripts/appstore-bootstrap.sh \
-    --api-key ~/Downloads/AuthKey_ABCD123456.p8 \
-    --key-id ABCD123456 \
-    --issuer-id 00000000-0000-0000-0000-000000000000
-```
-
-This copies the key to `~/.appstoreconnect/private_keys/`, which is the only place
-`altool` looks for it, and records the two non-secret ids in `scripts/appstore.env`.
-That file is gitignored; the key never enters the repo.
-
-**Fallback — Apple ID and app-specific password.** Ties releases to one person's
-Apple ID, but requires no role beyond the ability to upload builds, which App Manager
-has. This is the practical path for a non-Admin.
-
-Create the password at <https://appleid.apple.com> → Sign-In and Security →
-App-Specific Passwords, then:
-
-```bash
-./scripts/appstore-bootstrap.sh --store-password
-```
-
-The password goes into the login keychain. `release.sh` passes
-`@keychain:AutoSignDisplay-ASC` to `altool` and never handles the secret itself.
-
-## Version and build numbers
-
-Both are passed to `xcodebuild` on the command line, never written into
-`project.pbxproj`. A release therefore leaves the working tree clean and the same
-command is reproducible later from CI.
-
-- **Version** defaults to the project's `MARKETING_VERSION`. It **must match** the
-  version of the App Store Connect record, or the upload is rejected. Override with
-  `--version 1.0` without touching the project.
-- **Build** defaults to `git rev-list --count HEAD` — the commit count. Monotonic,
-  reproducible from a checkout, and needs no state outside git. App Store Connect
-  rejects a build number it has already accepted for the same version, so this has to
-  increase; a commit count does, a timestamp is noisier, and a hand-maintained
-  counter drifts.
-
-`release.sh` reads the built `Info.plist` back and fails if the version or build in
-the binary is not what you asked for. That catches
-`manageAppVersionAndBuildNumber` being turned back on in the export options, which
-would otherwise silently let Xcode pick its own numbers.
-
-## Releasing
-
-Always start with a validation pass. It runs App Store Connect's own acceptance
-checks — version/record mismatches, missing icons, bad entitlements — without
-spending a build number:
-
-```bash
-./scripts/release.sh --validate-only
-```
-
-Then upload:
-
-```bash
-./scripts/release.sh
-```
-
-Useful variations:
-
-```bash
-./scripts/release.sh --dry-run                 # print every command, run none
-./scripts/release.sh --skip-upload             # .ipa only, no network
-./scripts/release.sh --version 1.0 --build 42  # pin both
-./scripts/release.sh --team "Princeton"        # match a team by organisation name
-./scripts/release.sh --keep-archive            # keep the .xcarchive
-```
-
-Output lands in `build/release/<version>-<build>/` — gitignored.
-
-After a successful upload, App Store Connect processes the build before it can be
-selected. Usually minutes; occasionally an hour. You get an email.
-
-## Tests
-
-The scripts have their own tests, which never touch the network, the keychain, or
-App Store Connect:
-
-```bash
-bats scripts/tests/appstore.bats
-shellcheck -x scripts/lib/appstore.sh scripts/appstore-bootstrap.sh scripts/release.sh
-```
-
-The functions that parse tool output take stdin specifically so they can be driven
-from fixtures — `security find-identity` output cannot otherwise be reproduced on a
-machine that lacks the certificates.
-
-## CI/CD
-
-Not wired up yet, deliberately. Two things to know when it is:
-
-- **tvOS archiving cannot run in a container.** It needs macOS and a full Xcode, so
-  this pipeline cannot follow the containerized-CI pattern the rest of the test suite
-  uses. It needs a macOS runner, hosted or self-hosted.
-- **The scripts are already CI-shaped.** Every value in `scripts/appstore.env` is
-  also read from the environment, so a runner supplies the same configuration through
-  secrets with no file on disk. What CI additionally needs is the signing certificate
-  in its keychain — export the distribution cert and key as a `.p12`, store it as a
-  secret, and import it into a temporary keychain per run rather than letting Xcode
-  mint new certificates against the team's two-certificate cap.
+They cannot work without a distribution certificate in the keychain, which is the
+constraint that led here in the first place.

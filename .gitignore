@@ -33,9 +33,9 @@ examples/
 # Test output files
 test_*.txt
 
-# App Store Connect credentials and release artifacts (never commit these)
-scripts/appstore.env
+# Signing material. Xcode Cloud signs on Apple's infrastructure so none of this
+# should exist locally, but an accidental commit of a private key is unrecoverable
+# and the guard costs nothing.
 *.p8
 *.p12
 *.mobileprovision
-ExportOptions.plist

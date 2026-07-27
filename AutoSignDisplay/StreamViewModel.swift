@@ -49,6 +49,23 @@ struct ChannelPreset: Equatable {
         )
     }
 
+    /// Short, speakable stand-in for this preset, or nil when it has nothing worth
+    /// reading out.
+    ///
+    /// A full HLS URL spelled character by character is unusable in VoiceOver — and
+    /// unreadable in a confirmation alert — so an unnamed preset falls back to the
+    /// URL's filename, then its host, rather than the whole string. Shared by the
+    /// main screen's row labels and the delete-confirmation message so the two
+    /// cannot drift.
+    var spokenDescriptor: String? {
+        if !name.isEmpty { return name }
+        guard let parsed = URL(string: url) else { return nil }
+        let filename = parsed.lastPathComponent
+        if !filename.isEmpty, filename != "/" { return filename }
+        if let host = parsed.host, !host.isEmpty { return host }
+        return nil
+    }
+
     /// Legacy format: managed config or persisted UserDefaults stored the presets
     /// as `[String]` (URLs only). Convert to a nameless ChannelPreset.
     static func fromLegacyString(_ url: String) -> ChannelPreset? {

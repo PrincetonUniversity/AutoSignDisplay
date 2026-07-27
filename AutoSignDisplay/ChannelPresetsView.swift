@@ -176,9 +176,10 @@ struct ChannelPresetsView: View {
         guard viewModel.channelPresets.indices.contains(index) else {
             return "This preset will be removed."
         }
-        let preset = viewModel.channelPresets[index]
-        let descriptor = preset.name.isEmpty ? preset.url : preset.name
-        if descriptor.isEmpty {
+        // `spokenDescriptor` rather than the raw URL: this message is read aloud
+        // before a destructive confirmation, and a full HLS URL spelled out character
+        // by character is unusable. Falls back to the URL's filename or host.
+        guard let descriptor = viewModel.channelPresets[index].spokenDescriptor else {
             return "Preset \(index + 1) will be removed."
         }
         return "\(descriptor) will be removed."
@@ -271,7 +272,17 @@ private struct PresetGroup: View {
             }
         }
         .accessibilityElement(children: .contain)
-        .accessibilityLabel("Preset \(index + 1)")
+        // Carries the state the SELECTED/PLAYING marker shows visually. That marker is
+        // hidden from accessibility to keep it out of the child labels, so without this
+        // a VoiceOver user could not tell which preset is selected or on screen.
+        .accessibilityLabel(accessibilityLabel)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var accessibilityLabel: String {
+        let position = "Preset \(index + 1)"
+        guard isSelected else { return position }
+        return isPlaying ? "\(position), playing" : "\(position), selected"
     }
 }
 

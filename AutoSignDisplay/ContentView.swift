@@ -174,6 +174,13 @@ struct ContentView: View {
                                     }
                                     .buttonStyle(.borderedProminent)
                                     .disabled(viewModel.streamURL.isEmpty)
+                                    // Otherwise VoiceOver says only "Play Stream,
+                                    // dimmed", with no way to learn what is missing.
+                                    .accessibilityHint(
+                                        viewModel.streamURL.isEmpty
+                                            ? "Enter a stream URL or select a preset first"
+                                            : ""
+                                    )
 
                                     // Clears either a typed URL or a preset selection —
                                     // both live in the same two properties.
@@ -355,25 +362,15 @@ private extension ContentView {
         return "Preset \(index + 1)"
     }
 
-    // A URL spelled out character-by-character is unusable in VoiceOver. Prefer the
-    // preset's name; otherwise reduce the URL to its filename or host so the row
-    // reads as e.g. "Preset 1, x36xhzz.m3u8".
+    // A URL spelled out character-by-character is unusable in VoiceOver, so this
+    // reads as e.g. "Preset 1, x36xhzz.m3u8". The shortening lives on ChannelPreset
+    // because the delete-confirmation alert needs exactly the same treatment.
     func presetAccessibilityLabel(index: Int, preset: ChannelPreset) -> String {
         let position = "Preset \(index + 1)"
-        if !preset.name.isEmpty {
-            return "\(position), \(preset.name)"
+        if let descriptor = preset.spokenDescriptor {
+            return "\(position), \(descriptor)"
         }
-        guard !preset.url.isEmpty, let parsed = URL(string: preset.url) else {
-            return "\(position), empty"
-        }
-        let filename = parsed.lastPathComponent
-        if !filename.isEmpty, filename != "/" {
-            return "\(position), \(filename)"
-        }
-        if let host = parsed.host, !host.isEmpty {
-            return "\(position), \(host)"
-        }
-        return position
+        return preset.url.isEmpty ? "\(position), empty" : position
     }
 
     @MainActor

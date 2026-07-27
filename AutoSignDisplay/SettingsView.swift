@@ -60,6 +60,15 @@ struct SettingToggleRow: View {
 
 /// Row content for a focusable settings/preset row. Reads ambient focus so both
 /// the title and trailing value invert against the light focused background.
+///
+/// The trailing value is hidden from accessibility. SwiftUI merges a Button's child
+/// `Text` views into one accessibility label, so a visible "On" here plus the
+/// `.accessibilityValue("On")` its wrapper sets made VoiceOver say
+/// "Play on App Open On, On". The wrapping row owns the spoken value; this view
+/// only draws it.
+///
+/// A `RowLabel` used *outside* a Button therefore has no spoken value at all, and
+/// must supply one itself — see the Settings PIN status row.
 struct RowLabel: View {
     let title: String
     var value: String?
@@ -73,6 +82,7 @@ struct RowLabel: View {
             if let value {
                 Text(value)
                     .foregroundColor(isFocused ? .black.opacity(0.65) : .secondary)
+                    .accessibilityHidden(true)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -440,11 +450,18 @@ struct SettingsView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
 
+                    // Status only — not a control. `RowLabel` hides its trailing value
+                    // from accessibility because focusable rows speak it via
+                    // `.accessibilityValue`; this one has no wrapper to do that, so it
+                    // states its own label and value or "Set"/"Not set" would be silent.
                     RowLabel(
                         title: "Settings PIN",
                         value: settingsPIN.isEmpty ? "Not set" : "Set"
                     )
                     .padding(.top, ScreenMetrics.fieldSpacing)
+                    .accessibilityElement(children: .ignore)
+                    .accessibilityLabel("Settings PIN")
+                    .accessibilityValue(settingsPIN.isEmpty ? "Not set" : "Set")
 
                     if settingsPINManaged {
                         Text("Your administrator set this PIN. It cannot be changed here.")
@@ -601,6 +618,11 @@ private struct SettingsPINEditorView: View {
 
     /// Applies the PIN when both entries agree. Called from each field's Done, so a
     /// half-typed confirmation is never judged mid-entry.
+    ///
+    /// Every outcome is announced, not just success. On failure this screen neither
+    /// pops nor moves focus and only its caption text changes, so without an
+    /// announcement a VoiceOver user pressing Done gets no signal at all — on the one
+    /// screen where being left guessing means being locked out.
     private func evaluate() {
         guard bothEntered else {
             errorMessage = nil
@@ -608,10 +630,14 @@ private struct SettingsPINEditorView: View {
         }
         guard StreamViewModel.isValidSettingsPIN(newPIN) else {
             errorMessage = nil   // the guidance already explains the length rule
+            AccessibilityNotification.Announcement(
+                "Use at least \(StreamViewModel.minimumSettingsPINLength) digits, numbers only."
+            ).post()
             return
         }
         guard newPIN == confirmPIN else {
             errorMessage = "The two entries do not match."
+            AccessibilityNotification.Announcement("The two entries do not match").post()
             return
         }
         if onSave(newPIN) {
@@ -620,6 +646,7 @@ private struct SettingsPINEditorView: View {
             dismiss()
         } else {
             errorMessage = "Could not set that PIN. Try another."
+            AccessibilityNotification.Announcement("Could not set that PIN. Try another.").post()
         }
     }
 }

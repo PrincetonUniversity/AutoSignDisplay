@@ -21,6 +21,9 @@ Carthage/Build/
 # Editor / IDE local config
 .vscode/
 
+# Local reference material (design sources, photos) — not part of the build
+examples/
+
 # Various temporary files and logs
 *.swp
 *.lock

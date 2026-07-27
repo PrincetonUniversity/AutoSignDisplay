@@ -369,7 +369,7 @@ class StreamViewModel: ObservableObject {
 
     /// Shortest PIN the UI will store. A one-character PIN is almost always a
     /// half-typed one, and it locks the very screen needed to correct it.
-    static let minimumSettingsPINLength = 4
+    static let minimumSettingsPINLength = 6
 
     /// Digits only, at least `minimumSettingsPINLength`.
     static func isValidSettingsPIN(_ candidate: String) -> Bool {

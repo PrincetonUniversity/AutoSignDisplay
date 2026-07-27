@@ -717,14 +717,14 @@ struct AutoSignDisplayTests {
         @MainActor func makeVM() -> StreamViewModel { StreamViewModel(logger: TestLogger()) }
 
         var vm = await MainActor.run { makeVM() }
-        await MainActor.run { vm.setSettingsPIN("4821") }
+        await MainActor.run { vm.setSettingsPIN("482159") }
         #expect(vm.settingsLocked)
-        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "4821")
+        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "482159")
 
-        #expect(vm.isCorrectSettingsPIN("4821"))
+        #expect(vm.isCorrectSettingsPIN("482159"))
         // A stray space from the on-screen keyboard should not read as wrong.
-        #expect(vm.isCorrectSettingsPIN(" 4821 "))
-        #expect(!vm.isCorrectSettingsPIN("1234"))
+        #expect(vm.isCorrectSettingsPIN(" 482159 "))
+        #expect(!vm.isCorrectSettingsPIN("123456"))
         #expect(!vm.isCorrectSettingsPIN(""))
 
         vm.stopRetryTimer()
@@ -746,18 +746,18 @@ struct AutoSignDisplayTests {
         let defaults = UserDefaults.standard
         let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
 
-        for rejected in ["1", "12", "123", "", "   ", "12a4", "abcd", "12 34"] {
+        for rejected in ["1", "12", "123", "1234", "12345", "", "   ", "12a4", "abcd", "12 34"] {
             let applied = await MainActor.run { vm.setSettingsPIN(rejected) }
             #expect(!applied, "\"\(rejected)\" must not be accepted as a PIN.")
             #expect(vm.settingsLocked == false)
             #expect(defaults.object(forKey: ContentView.settingsPINKey) == nil)
         }
 
-        // Four digits is the floor.
-        let applied = await MainActor.run { vm.setSettingsPIN("1234") }
+        // Six digits is the floor.
+        let applied = await MainActor.run { vm.setSettingsPIN("123456") }
         #expect(applied)
         #expect(vm.settingsLocked)
-        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "1234")
+        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "123456")
         vm.stopRetryTimer()
     }
 
@@ -790,23 +790,23 @@ struct AutoSignDisplayTests {
         let defaults = UserDefaults.standard
 
         await MainActor.run {
-            defaults.set([AppConfigKeys.settingsPIN: "  9999  "],
+            defaults.set([AppConfigKeys.settingsPIN: "  999911  "],
                          forKey: "com.apple.configuration.managed")
             AppConfig.applyConfiguration(logger: TestLogger())
         }
         // Trimmed on apply, and flagged as administrator-owned.
-        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "9999")
+        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "999911")
         #expect(defaults.bool(forKey: ContentView.settingsPINManagedKey) == true)
 
         let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
         #expect(vm.settingsPINManaged)
-        #expect(vm.isCorrectSettingsPIN("9999"))
+        #expect(vm.isCorrectSettingsPIN("999911"))
 
         // A local user must not be able to change or clear it.
-        await MainActor.run { vm.setSettingsPIN("0000") }
-        #expect(vm.settingsPIN == "9999")
+        await MainActor.run { vm.setSettingsPIN("000022") }
+        #expect(vm.settingsPIN == "999911")
         await MainActor.run { vm.clearSettingsPIN() }
-        #expect(vm.settingsPIN == "9999")
+        #expect(vm.settingsPIN == "999911")
         vm.stopRetryTimer()
     }
 
@@ -838,12 +838,12 @@ struct AutoSignDisplayTests {
 
         // A managed PIN is in force.
         await MainActor.run {
-            defaults.set([AppConfigKeys.settingsPIN: "4821",
+            defaults.set([AppConfigKeys.settingsPIN: "482159",
                           AppConfigKeys.channelPresets: presets],
                          forKey: "com.apple.configuration.managed")
             AppConfig.applyConfiguration(logger: TestLogger())
         }
-        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "4821")
+        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "482159")
         #expect(defaults.bool(forKey: ContentView.settingsPINManagedKey) == true)
 
         // The administrator pushes a payload that still exists but no longer carries
@@ -875,14 +875,14 @@ struct AutoSignDisplayTests {
 
         // Pushing a known PIN overrides it, which is the device-side recovery route.
         await MainActor.run {
-            defaults.set([AppConfigKeys.settingsPIN: "0000"],
+            defaults.set([AppConfigKeys.settingsPIN: "000022"],
                          forKey: "com.apple.configuration.managed")
             AppConfig.applyConfiguration(logger: TestLogger())
         }
-        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "0000")
+        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "000022")
 
         let recovered = await MainActor.run { StreamViewModel(logger: TestLogger()) }
-        #expect(recovered.isCorrectSettingsPIN("0000"))
+        #expect(recovered.isCorrectSettingsPIN("000022"))
         #expect(!recovered.isCorrectSettingsPIN("735192"))
         recovered.stopRetryTimer()
     }
@@ -912,11 +912,11 @@ struct AutoSignDisplayTests {
         let defaults = UserDefaults.standard
 
         await MainActor.run {
-            defaults.set([AppConfigKeys.settingsPIN: "4821"],
+            defaults.set([AppConfigKeys.settingsPIN: "482159"],
                          forKey: "com.apple.configuration.managed")
             AppConfig.applyConfiguration(logger: TestLogger())
         }
-        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "4821")
+        #expect(defaults.string(forKey: ContentView.settingsPINKey) == "482159")
 
         // Pulling the payload must not strand Settings behind a PIN nobody on site
         // knows. The managed flag alone is enough to trigger the reset, even with no

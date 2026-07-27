@@ -12,11 +12,11 @@
     <key>ViewOnlyMode</key>
     <false/>
 
-    <!-- String, at least 4 characters: require this PIN to open Settings.
+    <!-- String, at least 6 characters: require this PIN to open Settings.
          A deterrent, not security:
          stored in preferences, not the keychain. -->
     <key>SettingsPIN</key>
-    <string>4821</string>
+    <string>482159</string>
 
     <!-- Boolean: play the configured stream when the app opens -->
     <key>PlayOnAppOpen</key>

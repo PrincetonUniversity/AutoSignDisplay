@@ -162,7 +162,17 @@ struct LabeledTextField: View {
     @Binding var text: String
     var disabled: Bool = false
     var isURL: Bool = false
+    /// Masks the entered value. Uses `SecureField`, which is the platform's own
+    /// masking — hand-rolling it would mean showing one string while storing
+    /// another, and custom text-field manipulation is what broke editing on tvOS
+    /// repeatedly. Note the mask renders as dots, not literal asterisks; the
+    /// character is not configurable.
+    var isSecure: Bool = false
     var accessibilityLabelText: String
+    /// Fires when the user commits from the keyboard screen (Done), not per
+    /// keystroke. Acting on every character meant a screen could pop out from under
+    /// the still-open keyboard the instant its value became acceptable.
+    var onSubmit: (() -> Void)?
 
     var body: some View {
         HStack(spacing: 24) {
@@ -171,15 +181,22 @@ struct LabeledTextField: View {
                 .frame(width: 120, alignment: .leading)
                 .accessibilityHidden(true)
 
-            if isURL {
+            if isSecure {
+                SecureField(placeholder, text: $text)
+                    .onSubmit { onSubmit?() }
+                    .accessibilityLabel(accessibilityLabelText)
+                    .disabled(disabled)
+            } else if isURL {
                 TextField(placeholder, text: $text)
                     .textContentType(.URL)
                     .autocorrectionDisabled()
                     .textInputAutocapitalization(.never)
+                    .onSubmit { onSubmit?() }
                     .accessibilityLabel(accessibilityLabelText)
                     .disabled(disabled)
             } else {
                 TextField(placeholder, text: $text)
+                    .onSubmit { onSubmit?() }
                     .accessibilityLabel(accessibilityLabelText)
                     .disabled(disabled)
             }
@@ -237,6 +254,7 @@ struct SettingsGateView: View {
                             label: "PIN",
                             placeholder: "Required",
                             text: $enteredPIN,
+                            isSecure: true,
                             accessibilityLabelText: "Settings PIN"
                         )
 
@@ -330,36 +348,6 @@ struct SettingsView: View {
     var onViewOnlyModeChanged: (Bool) -> Void
     var onSetPIN: (String) -> Bool
     var onClearPIN: () -> Void
-
-    /// Drafts. The PIN is only written when Set PIN is pressed: binding a field
-    /// straight to storage meant the first digit of a longer PIN took effect on its
-    /// own and locked the user out of this screen.
-    @State private var newPIN = ""
-    @State private var confirmPIN = ""
-    @State private var pinFeedback: String?
-
-    private var pinsMatch: Bool { newPIN == confirmPIN }
-
-    /// Says why Set PIN is unavailable, rather than leaving it inertly dimmed.
-    private var pinGuidance: String {
-        if let pinFeedback { return pinFeedback }
-        if newPIN.isEmpty {
-            return "Requires this PIN to open Settings. \(StreamViewModel.minimumSettingsPINLength) digits or more."
-        }
-        if !StreamViewModel.isValidSettingsPIN(newPIN) {
-            return "Use at least \(StreamViewModel.minimumSettingsPINLength) digits, numbers only."
-        }
-        if !pinsMatch {
-            return "The two entries do not match yet."
-        }
-        return "Press Set PIN to apply."
-    }
-    private var canSetPIN: Bool {
-        !settingsPINManaged
-            && !settingsDisabled
-            && StreamViewModel.isValidSettingsPIN(newPIN)
-            && pinsMatch
-    }
 
     var body: some View {
         ZStack {
@@ -462,51 +450,31 @@ struct SettingsView: View {
                         Text("Your administrator set this PIN. It cannot be changed here.")
                             .font(.caption)
                             .foregroundColor(.secondary)
-                    } else {
-                        LabeledTextField(
-                            label: "New PIN",
-                            placeholder: "\(StreamViewModel.minimumSettingsPINLength)+ digits",
-                            text: $newPIN,
-                            disabled: settingsDisabled,
-                            accessibilityLabelText: "New settings PIN"
-                        )
-
-                        LabeledTextField(
-                            label: "Confirm",
-                            placeholder: "Re-enter",
-                            text: $confirmPIN,
-                            disabled: settingsDisabled,
-                            accessibilityLabelText: "Confirm new settings PIN"
-                        )
-
-                        HStack(spacing: ScreenMetrics.buttonSpacing) {
-                            Button {
-                                if onSetPIN(newPIN) {
-                                    pinFeedback = "PIN set."
-                                    newPIN = ""
-                                    confirmPIN = ""
-                                    AccessibilityNotification.Announcement("PIN set").post()
-                                } else {
-                                    pinFeedback = "Could not set that PIN."
-                                }
-                            } label: {
-                                CenteredRowLabel(title: "Set PIN")
-                            }
-                            .disabled(!canSetPIN)
-
-                            Button {
-                                onClearPIN()
-                                pinFeedback = "PIN removed."
-                                newPIN = ""
-                                confirmPIN = ""
-                                AccessibilityNotification.Announcement("PIN removed").post()
-                            } label: {
-                                DestructiveRowLabel(title: "Remove PIN")
-                            }
-                            .disabled(settingsDisabled || settingsPIN.isEmpty)
+                    } else if settingsPIN.isEmpty {
+                        // Pushed, not presented: a text field inside a modal does not
+                        // get its editing presentation torn down on tvOS when the user
+                        // backs out of the keyboard.
+                        NavigationLink {
+                            SettingsPINEditorView(onSave: onSetPIN)
+                        } label: {
+                            RowLabel(title: "Set PIN")
                         }
+                        .disabled(settingsDisabled)
+                        .accessibilityHint("Opens the PIN editor")
 
-                        Text(pinGuidance)
+                        Text("Requires a PIN to open Settings.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    } else {
+                        Button {
+                            onClearPIN()
+                            AccessibilityNotification.Announcement("PIN removed").post()
+                        } label: {
+                            DestructiveRowLabel(title: "Remove PIN")
+                        }
+                        .disabled(settingsDisabled)
+
+                        Text("Settings will open without a PIN once removed.")
                             .font(.caption)
                             .foregroundColor(.secondary)
                     }
@@ -539,6 +507,119 @@ struct SettingsView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, ScreenMetrics.horizontalPadding)
             .padding(.vertical, ScreenMetrics.verticalPadding)
+        }
+    }
+}
+
+/// Full-screen PIN editor, reached by a navigation push.
+///
+/// No Save or Cancel: the PIN is applied and the screen pops when the user presses
+/// Done on the keyboard and the two entries agree. Backing out with Menu without
+/// matching entries is the cancel path, and nothing is written until they match.
+///
+/// Evaluating per keystroke instead popped this screen out from under the still-open
+/// keyboard the moment the values happened to match.
+///
+/// Kept separate from Settings so the PIN is only ever written once. An earlier
+/// version put these fields inline and bound them straight to storage, which meant
+/// the first digit of a longer PIN took effect on its own and locked the user out
+/// of the screen needed to undo it.
+private struct SettingsPINEditorView: View {
+    let onSave: (String) -> Bool
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var newPIN = ""
+    @State private var confirmPIN = ""
+    @State private var errorMessage: String?
+
+    private var bothEntered: Bool { !newPIN.isEmpty && !confirmPIN.isEmpty }
+
+    /// Says what is still needed, or what went wrong.
+    private var guidance: String {
+        if let errorMessage { return errorMessage }
+        if newPIN.isEmpty {
+            return "Enter a PIN of \(StreamViewModel.minimumSettingsPINLength) digits or more."
+        }
+        if !StreamViewModel.isValidSettingsPIN(newPIN) {
+            return "Use at least \(StreamViewModel.minimumSettingsPINLength) digits, numbers only."
+        }
+        if confirmPIN.isEmpty { return "Re-enter the same PIN to confirm." }
+        return "Press Done on the keyboard to apply."
+    }
+
+    var body: some View {
+        ZStack {
+            ModalBackground()
+
+            ScrollView {
+                VStack(alignment: .leading, spacing: ScreenMetrics.groupSpacing) {
+                    Text("Set PIN")
+                        .font(.largeTitle)
+                        .fontWeight(.semibold)
+                        .padding(.bottom, ScreenMetrics.titleSpacing)
+                        .accessibilityAddTraits(.isHeader)
+
+                    VStack(alignment: .leading, spacing: ScreenMetrics.fieldSpacing) {
+                        SectionHeader("New Settings PIN")
+
+                        LabeledTextField(
+                            label: "PIN",
+                            placeholder: "\(StreamViewModel.minimumSettingsPINLength)+ digits",
+                            text: $newPIN,
+                            isSecure: true,
+                            accessibilityLabelText: "New settings PIN",
+                            onSubmit: { evaluate() }
+                        )
+
+                        LabeledTextField(
+                            label: "Confirm",
+                            placeholder: "Re-enter",
+                            text: $confirmPIN,
+                            isSecure: true,
+                            accessibilityLabelText: "Confirm new settings PIN",
+                            onSubmit: { evaluate() }
+                        )
+
+                        Text(guidance)
+                            .font(.caption)
+                            .foregroundColor(errorMessage == nil
+                                             ? .secondary
+                                             : Color(red: 1.0, green: 0.45, blue: 0.42))
+                            .padding(.top, ScreenMetrics.fieldSpacing)
+
+                        Text("Leave without matching entries to cancel.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, ScreenMetrics.horizontalPadding)
+                .padding(.vertical, ScreenMetrics.verticalPadding)
+            }
+        }
+    }
+
+    /// Applies the PIN when both entries agree. Called from each field's Done, so a
+    /// half-typed confirmation is never judged mid-entry.
+    private func evaluate() {
+        guard bothEntered else {
+            errorMessage = nil
+            return
+        }
+        guard StreamViewModel.isValidSettingsPIN(newPIN) else {
+            errorMessage = nil   // the guidance already explains the length rule
+            return
+        }
+        guard newPIN == confirmPIN else {
+            errorMessage = "The two entries do not match."
+            return
+        }
+        if onSave(newPIN) {
+            errorMessage = nil
+            AccessibilityNotification.Announcement("PIN set").post()
+            dismiss()
+        } else {
+            errorMessage = "Could not set that PIN. Try another."
         }
     }
 }

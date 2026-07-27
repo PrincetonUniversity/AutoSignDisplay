@@ -36,7 +36,7 @@
   <key>ViewOnlyMode</key>
   <false/>
 
-  <!-- String, at least 4 characters. Require this PIN to open Settings. Setting it
+  <!-- String, at least 6 characters. Require this PIN to open Settings. Setting it
        here also makes the on-device PIN field read-only, so a local user cannot
        change or remove an administrator's PIN.
 
@@ -44,7 +44,7 @@
        app's preferences, not the keychain. Do not reuse a PIN that protects
        anything else. -->
   <key>SettingsPIN</key>
-  <string>4821</string>
+  <string>482159</string>
 
   <!-- Boolean. Lock the on-device Settings screen. Leave true for unattended
        displays so a passer-by cannot change playback behavior. -->

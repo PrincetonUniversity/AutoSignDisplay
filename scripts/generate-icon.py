@@ -262,8 +262,17 @@ TOP_SHELF_WIDE_MANIFEST = {
 
 def write_layer(stack_dir, layer_name, renditions):
     """`renditions` is a list of (image, filename, scale)."""
-    imageset = stack_dir / f"{layer_name}.imagestacklayer" / "Content.imageset"
+    layer_dir = stack_dir / f"{layer_name}.imagestacklayer"
+    imageset = layer_dir / "Content.imageset"
     imageset.mkdir(parents=True, exist_ok=True)
+
+    # The layer itself carries no image — the artwork lives in Content.imageset below.
+    # Written explicitly because Xcode's template left one layer holding an unassigned
+    # slot ({"idiom": "tv"} with no filename) while its siblings had none, and that
+    # drift outlived several regenerations.
+    (layer_dir / "Contents.json").write_text(
+        json.dumps({"info": {"author": "xcode", "version": 1}}, indent=2) + "\n"
+    )
     for image, filename, _ in renditions:
         image.save(imageset / filename, "PNG")
     manifest = {

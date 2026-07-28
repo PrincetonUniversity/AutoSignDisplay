@@ -30,6 +30,12 @@ echo "[run-tests] device: $UDID"
 ensure_booted "$UDID" "$DRY_RUN"
 apply_managed_state "$UDID" "$MANAGED_MODE" "$DRY_RUN"
 
+# Same checks Xcode Cloud runs via ci_scripts/ci_post_clone.sh. Cheap, and they
+# catch the classes of defect that otherwise surface only after an upload.
+if [[ "$DRY_RUN" -eq 0 ]]; then
+  python3 "$REPO_ROOT/scripts/check-source-patterns.py"
+fi
+
 CMD=(xcodebuild -project "$PROJECT_NAME.xcodeproj" -scheme "$SCHEME_NAME" -sdk appletvsimulator -destination "id=$UDID" -parallel-testing-enabled NO test)
 
 echo "[run-tests] running: ${CMD[*]}"

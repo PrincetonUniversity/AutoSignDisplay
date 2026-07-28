@@ -39,6 +39,8 @@ test_*.txt
 *.p8
 *.p12
 *.mobileprovision
+# Apps and Books / legacy VPP content tokens authorize purchases for a location.
+*.vpptoken
 
 # Agent instructions — deliberately untracked
 CLAUDE.md

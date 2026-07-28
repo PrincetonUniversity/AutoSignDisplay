@@ -9,11 +9,11 @@ struct LoggerTests {
     }
 
     @Test func autoResumeLogEmitted() async throws {
-        // Prepare user defaults
-        await MainActor.run {
-            UserDefaults.standard.set("https://example.com/stream.m3u8", forKey: ContentView.lastStreamURLKey)
-        }
-
+        // Deliberately touches no UserDefaults. It used to seed lastStreamURLKey and
+        // then overwrite vm.streamURL on the next line anyway, so the write bought
+        // nothing — but it made this suite a second writer of the shared defaults
+        // domain, and Swift Testing runs top-level suites concurrently. Serializing
+        // AutoSignDisplayTests would not have protected against this one.
         let testLogger = TestLogger()
         let vm = StreamViewModel(logger: testLogger)
         vm.streamURL = "https://example.com/stream.m3u8"

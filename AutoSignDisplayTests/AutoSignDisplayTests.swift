@@ -9,6 +9,19 @@ import Foundation
 import Testing
 @testable import AutoSignDisplay
 
+/// Serialized because every test in here mutates the process-wide
+/// `UserDefaults.standard` and then asserts on what it wrote.
+///
+/// Swift Testing runs tests concurrently by default. `scripts/run-tests.sh` passes
+/// `-parallel-testing-enabled NO`, which hid that for as long as the suite was only
+/// ever run through the script — then Xcode Cloud invoked `xcodebuild` without the
+/// flag and 79 tests became 158 failures across two destinations, every one of them
+/// a test reading a value some other test had just written.
+///
+/// `@MainActor` is not sufficient: it stops two tests running *simultaneously*, not
+/// interleaving at their `await` points, which is all it takes to clobber a shared
+/// defaults key. Correctness has to live in the suite, not in how it is invoked.
+@Suite(.serialized)
 @MainActor
 struct AutoSignDisplayTests {
 

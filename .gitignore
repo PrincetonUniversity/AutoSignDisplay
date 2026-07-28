@@ -39,3 +39,7 @@ test_*.txt
 *.p8
 *.p12
 *.mobileprovision
+
+# Agent instructions — deliberately untracked
+CLAUDE.md
+.claude/

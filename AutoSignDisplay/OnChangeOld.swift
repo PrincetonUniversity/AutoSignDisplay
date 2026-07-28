@@ -1,23 +1,23 @@
 import SwiftUI
 
-/// Provides an onChange-like view modifier that supplies both the old and new
-/// value to the handler. This avoids relying on SDK-specific overloads and
-/// compiles consistently across Xcode versions.
+/// An onChange-like modifier that hands the handler both the old and the new value.
+///
+/// The two-parameter `onChange` has existed since tvOS 17 and this app targets 18.4,
+/// so the shim no longer tracks the previous value itself — it just forwards. What it
+/// still buys is a stable call-site spelling: every `onChangeOld` in the app keeps
+/// working, and the single-parameter overload it used to call is deprecated and warns.
 struct OnChangeOldModifier<Value: Equatable>: ViewModifier {
-    @State private var previous: Value
     private let value: Value
     private let action: (Value, Value) -> Void
 
     init(value: Value, action: @escaping (Value, Value) -> Void) {
         self.value = value
-        self._previous = State(initialValue: value)
         self.action = action
     }
 
     func body(content: Content) -> some View {
-        content.onChange(of: value) { newValue in
-            action(previous, newValue)
-            previous = newValue
+        content.onChange(of: value) { oldValue, newValue in
+            action(oldValue, newValue)
         }
     }
 }

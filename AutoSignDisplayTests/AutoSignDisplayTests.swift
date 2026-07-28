@@ -361,9 +361,8 @@ struct AutoSignDisplayTests {
         #expect(vm.canAddMorePresets == true)
 
         // Add a preset
-        await MainActor.run {
-            vm.addChannelPreset()
-        }
+        let added = await MainActor.run { vm.addChannelPreset() }
+        #expect(added != nil)
         #expect(vm.channelPresets.count == 2)
         #expect(persistedPresetURLs(defaults).count == 2)
 
@@ -545,10 +544,10 @@ struct AutoSignDisplayTests {
 
         var vm = await MainActor.run { makeViewModel() }
 
-        // Attempt to add
-        await MainActor.run {
-            vm.addChannelPreset()
-        }
+        // Attempt to add. Under MDM this must be refused: nil is the refusal, and
+        // asserting it directly says so, where the unchanged count only implies it.
+        let added = await MainActor.run { vm.addChannelPreset() }
+        #expect(added == nil)
         #expect(vm.channelPresets.count == 2)
 
         // Return to main screen
@@ -730,7 +729,7 @@ struct AutoSignDisplayTests {
         @MainActor func makeVM() -> StreamViewModel { StreamViewModel(logger: TestLogger()) }
 
         var vm = await MainActor.run { makeVM() }
-        await MainActor.run { vm.setSettingsPIN("482159") }
+        #expect(await MainActor.run { vm.setSettingsPIN("482159") })
         #expect(vm.settingsLocked)
         #expect(defaults.string(forKey: ContentView.settingsPINKey) == "482159")
 
@@ -745,7 +744,7 @@ struct AutoSignDisplayTests {
         #expect(vm.settingsLocked, "PIN must survive a relaunch.")
 
         // Removing the lock is now an explicit action, not a blank write.
-        await MainActor.run { vm.clearSettingsPIN() }
+        #expect(await MainActor.run { vm.clearSettingsPIN() })
         #expect(vm.settingsLocked == false)
         #expect(defaults.object(forKey: ContentView.settingsPINKey) == nil)
         vm.stopRetryTimer()
@@ -816,9 +815,9 @@ struct AutoSignDisplayTests {
         #expect(vm.isCorrectSettingsPIN("999911"))
 
         // A local user must not be able to change or clear it.
-        await MainActor.run { vm.setSettingsPIN("000022") }
+        #expect(await MainActor.run { vm.setSettingsPIN("000022") } == false)
         #expect(vm.settingsPIN == "999911")
-        await MainActor.run { vm.clearSettingsPIN() }
+        #expect(await MainActor.run { vm.clearSettingsPIN() } == false)
         #expect(vm.settingsPIN == "999911")
         vm.stopRetryTimer()
     }
@@ -882,7 +881,7 @@ struct AutoSignDisplayTests {
 
         // A user sets a PIN on-device and forgets it.
         let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
-        await MainActor.run { vm.setSettingsPIN("735192") }
+        #expect(await MainActor.run { vm.setSettingsPIN("735192") })
         #expect(defaults.string(forKey: ContentView.settingsPINKey) == "735192")
         vm.stopRetryTimer()
 
@@ -908,7 +907,7 @@ struct AutoSignDisplayTests {
         let defaults = UserDefaults.standard
 
         let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
-        await MainActor.run { vm.setSettingsPIN("864209") }
+        #expect(await MainActor.run { vm.setSettingsPIN("864209") })
         vm.stopRetryTimer()
 
         await MainActor.run {

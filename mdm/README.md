@@ -5,7 +5,8 @@ on the device can be set centrally instead, and locked.
 
 | File | Use |
 |---|---|
-| [`jamf-app-config-kiosk.xml`](jamf-app-config-kiosk.xml) | Typical unattended display — one channel, locked settings. Start here. |
+| [`jamf-app-config-verify.xml`](jamf-app-config-verify.xml) | First install on a managed device — proves the payload is arriving, locks nothing. Start here. |
+| [`jamf-app-config-kiosk.xml`](jamf-app-config-kiosk.xml) | Typical unattended display — one channel, locked settings. |
 | [`jamf-app-config.xml`](jamf-app-config.xml) | Every supported key, commented. |
 
 Both are also mirrored by
@@ -186,6 +187,35 @@ This applies to `PlayOnAppOpen`, `AutoResume`, `SettingsDisabled`, and
 - **Removing the payload does not reset local-only preferences** such as Confirm
   Before Deleting, which has no managed key: preset editing is unavailable under
   MDM, so there is nothing for an administrator to configure.
+
+## Applying a changed payload
+
+**The app reads managed configuration once, at launch.** `applyConfiguration()` runs
+in the app's `init()`, so a payload you change in Jamf does not take effect until the
+app's process restarts. Backgrounding is not enough on tvOS — force-quit it
+(double-press TV, swipe up) or reboot the device.
+
+This matters operationally, not just while testing: changing the channel list for a
+wall-mounted display currently needs the app restarted. Until that changes, a
+Jamf-scheduled nightly restart is the practical way to make configuration changes
+land without visiting the device.
+
+Treating the payload as declarative — the app noticing a changed payload and
+reconciling to it live, including switching the playing channel — is planned for 1.1.
+It needs the configuration re-applied when the managed dictionary changes and the
+view model reloaded from defaults, and it has to avoid reacting to the app's *own*
+writes to `UserDefaults`, which would otherwise loop.
+
+## TestFlight cannot test any of this
+
+A build installed from TestFlight is not an MDM-managed app, so no managed
+configuration is delivered to it. TestFlight is the right way to check playback,
+auto-resume and the remote-control UI on real hardware; it tells you nothing about
+the managed path.
+
+To exercise managed configuration before the app is publicly available, distribute it
+as a **Custom App** through Apple Business Manager so Jamf installs it as a managed
+app. Only then does the App Configuration payload reach it.
 
 ## Verifying on a device or simulator
 

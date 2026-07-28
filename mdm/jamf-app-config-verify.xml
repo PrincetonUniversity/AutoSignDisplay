@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  AutoSignDisplay — Managed App Configuration (first-install verification)
+
+  Purpose: prove that managed configuration is reaching the app on a real
+  MDM-managed Apple TV, before locking anything down. Deliberately NOT a kiosk
+  payload — SettingsDisabled, ViewOnlyMode and SettingsPIN are all absent so you can
+  walk the UI and confirm what landed.
+
+  How to read the result from across the room, with no logs and no console:
+
+    - The heading says "MDM VERIFY — <location>". If it says "AutoSignDisplay"
+      instead, the payload did not arrive.
+    - The Stream Presets list shows two named entries, "Verify A" and "Verify B",
+      rather than the four default "Channel N" presets.
+    - The stream starts on its own, because PlayOnAppOpen is true.
+    - Settings > Recovery shows Retry Timeout as 7s. That value is not one of the
+      six the on-device UI cycles through, so seeing it proves the number came from
+      the payload rather than from a local default.
+
+  The stream URL is Mux's public HLS test stream, which resolves without
+  credentials. Swap it for one of your own once the payload is confirmed.
+
+  Then apply jamf-app-config-kiosk.xml to test the locked-down configuration.
+
+  NOTE: the app reads managed configuration at launch. After changing this payload
+  in Jamf, force-quit the app (double-press TV, swipe up) or reboot the device —
+  otherwise nothing appears to happen. See "Applying a changed payload" in
+  README.md.
+-->
+<plist version="1.0">
+<dict>
+  <!-- Name the actual display. This is the canary: visible instantly, and unique
+       enough that it cannot be confused with the app's own default heading. -->
+  <key>DisplayTitle</key>
+  <string>MDM VERIFY — Sherrerd Hall</string>
+
+  <key>PlayOnAppOpen</key>
+  <true/>
+
+  <key>AutoResume</key>
+  <true/>
+
+  <!-- 7 is deliberately not one of the values the Settings screen offers (3, 5, 10,
+       15, 30, 60). If the UI displays 7s, the payload is being honored. -->
+  <key>RetryTimeout</key>
+  <real>7.0</real>
+
+  <key>ChannelPresets</key>
+  <array>
+    <dict>
+      <key>Name</key>
+      <string>Verify A</string>
+      <key>URL</key>
+      <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+    </dict>
+    <dict>
+      <key>Name</key>
+      <string>Verify B</string>
+      <key>URL</key>
+      <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+    </dict>
+  </array>
+
+  <key>DefaultChannel</key>
+  <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+</dict>
+</plist>

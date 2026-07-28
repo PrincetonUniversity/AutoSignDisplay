@@ -243,11 +243,6 @@ def render_flat(size, icon_aspect=None):
 
 # ---------- manifests / IO ----------
 
-MANIFEST_TV_1X = {
-    "images": [{"filename": "Content.png", "idiom": "tv", "scale": "1x"}],
-    "info": {"author": "xcode", "version": 1},
-}
-
 TOP_SHELF_MANIFEST = {
     "images": [
         {"filename": "TopShelf.png", "idiom": "tv", "scale": "1x"},
@@ -265,18 +260,45 @@ TOP_SHELF_WIDE_MANIFEST = {
 }
 
 
-def write_layer(stack_dir, layer_name, image):
+def write_layer(stack_dir, layer_name, renditions):
+    """`renditions` is a list of (image, filename, scale)."""
     imageset = stack_dir / f"{layer_name}.imagestacklayer" / "Content.imageset"
     imageset.mkdir(parents=True, exist_ok=True)
-    image.save(imageset / "Content.png", "PNG")
-    (imageset / "Contents.json").write_text(json.dumps(MANIFEST_TV_1X, indent=2) + "\n")
+    for image, filename, _ in renditions:
+        image.save(imageset / filename, "PNG")
+    manifest = {
+        "images": [
+            {"filename": filename, "idiom": "tv", "scale": scale}
+            for _, filename, scale in renditions
+        ],
+        "info": {"author": "xcode", "version": 1},
+    }
+    (imageset / "Contents.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
 
-def write_layered_icon(stack_dir, size):
-    back, middle, front = render_layers(size)
-    write_layer(stack_dir, "Back", back)
-    write_layer(stack_dir, "Middle", middle)
-    write_layer(stack_dir, "Front", front)
+def write_layered_icon(stack_dir, size, include_2x=False):
+    """Write the Back/Middle/Front layers of one imagestack.
+
+    The home-screen icon needs both scales — Apple rejects the upload otherwise
+    (ITMS-90709: "missing an image for the background layer with a scale value of
+    '2'"), and it names only the first missing layer, so all three must be present.
+    The App Store icon is single-scale; adding a 2x there is not expected.
+
+    Rendered at each size rather than upscaled: the artwork is drawn from geometry
+    and supersampled, so a native 800x480 pass is sharper than a resized 400x240.
+    """
+    scales = [(size, "Content.png", "1x")]
+    if include_2x:
+        scales.append(((size[0] * 2, size[1] * 2), "Content@2x.png", "2x"))
+
+    rendered = {name: [] for name in ("Back", "Middle", "Front")}
+    for render_size, filename, scale in scales:
+        back, middle, front = render_layers(render_size)
+        for name, image in (("Back", back), ("Middle", middle), ("Front", front)):
+            rendered[name].append((image, filename, scale))
+
+    for name, renditions in rendered.items():
+        write_layer(stack_dir, name, renditions)
 
 
 def write_top_shelf(imageset_dir, base_size, name_1x, name_2x, manifest):
@@ -293,8 +315,8 @@ def main():
                     help="Also write flattened preview PNGs to /tmp for review")
     args = ap.parse_args()
 
-    print("Rendering home-screen layered icon (400x240)…")
-    write_layered_icon(BRAND / "App Icon.imagestack", HOME_ICON)
+    print("Rendering home-screen layered icon (400x240 @1x, 800x480 @2x)…")
+    write_layered_icon(BRAND / "App Icon.imagestack", HOME_ICON, include_2x=True)
 
     print("Rendering App Store layered icon (1280x768)…")
     write_layered_icon(BRAND / "App Icon - App Store.imagestack", STORE_ICON)

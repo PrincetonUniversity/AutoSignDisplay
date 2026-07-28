@@ -11,15 +11,16 @@
 
     - The heading says "MDM VERIFY — <location>". If it says "AutoSignDisplay"
       instead, the payload did not arrive.
-    - The Stream Presets list shows two named entries, "Verify A" and "Verify B",
-      rather than the four default "Channel N" presets.
+    - The Stream Presets list shows exactly two entries, "Verify Scenic" and
+      "Verify Announcements", rather than the app's four built-in channels (News,
+      News Plus, Scenic, Announcements).
     - The stream starts on its own, because PlayOnAppOpen is true.
     - Settings > Recovery shows Retry Timeout as 7s. That value is not one of the
       six the on-device UI cycles through, so seeing it proves the number came from
       the payload rather than from a local default.
 
-  The stream URL is Mux's public HLS test stream, which resolves without
-  credentials. Swap it for one of your own once the payload is confirmed.
+  The stream URLs are Princeton's own live channels, which redirect to Kaltura HLS
+  manifests and need no credentials.
 
   Then apply jamf-app-config-kiosk.xml to test the locked-down configuration.
 
@@ -50,19 +51,19 @@
   <array>
     <dict>
       <key>Name</key>
-      <string>Verify A</string>
+      <string>Verify Scenic</string>
       <key>URL</key>
-      <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+      <string>https://orfe.princeton.edu/live/scenic</string>
     </dict>
     <dict>
       <key>Name</key>
-      <string>Verify B</string>
+      <string>Verify Announcements</string>
       <key>URL</key>
-      <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+      <string>https://orfe.princeton.edu/live/announcements</string>
     </dict>
   </array>
 
   <key>DefaultChannel</key>
-  <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+  <string>https://orfe.princeton.edu/live/scenic</string>
 </dict>
 </plist>

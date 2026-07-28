@@ -43,25 +43,25 @@
     <array>
       <dict>
         <key>Name</key>
-        <string>Local News</string>
+        <string>News</string>
         <key>URL</key>
-        <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+        <string>https://orfe.princeton.edu/live/scenic</string>
       </dict>
       <dict>
         <key>Name</key>
-        <string>Weather</string>
+        <string>Scenic</string>
         <key>URL</key>
-        <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+        <string>https://orfe.princeton.edu/live/scenic</string>
       </dict>
       <dict>
         <!-- Name omitted: the URL will show in the list. -->
         <key>URL</key>
-        <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+        <string>https://orfe.princeton.edu/live/scenic</string>
       </dict>
     </array>
 
     <!-- String: default channel URL selected on launch (should match one of the presets) -->
     <key>DefaultChannel</key>
-    <string>https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8</string>
+    <string>https://orfe.princeton.edu/live/scenic</string>
   </dict>
 </plist>

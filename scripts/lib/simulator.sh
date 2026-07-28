@@ -119,7 +119,8 @@ import plistlib, sys
 with open(sys.argv[1], "rb") as f:
     inner = plistlib.load(f)
 # Point at a stream that actually resolves, so a managed run can be eyeballed.
-url = "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"
+# Scenic rather than news: a fixed camera is far more likely to be live.
+url = "https://orfe.princeton.edu/live/scenic"
 inner["ChannelPresets"] = [{"Name": "Test Stream", "URL": url}]
 inner["DefaultChannel"] = url
 with open(sys.argv[2], "wb") as f:

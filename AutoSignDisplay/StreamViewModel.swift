@@ -83,10 +83,10 @@ class StreamViewModel: ObservableObject {
     /// the app carries through for anyone who never customized it.
     static let defaultDisplayTitle = "AutoSignDisplay"
     static let defaultPresets: [ChannelPreset] = [
-        ChannelPreset(name: "Channel 1", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"),
-        ChannelPreset(name: "Channel 2", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"),
-        ChannelPreset(name: "Channel 3", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8"),
-        ChannelPreset(name: "Channel 4", url: "https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8")
+        ChannelPreset(name: "News", url: "https://orfe.princeton.edu/live/news"),
+        ChannelPreset(name: "News Plus", url: "https://orfe.princeton.edu/live/news-plus"),
+        ChannelPreset(name: "Scenic", url: "https://orfe.princeton.edu/live/scenic"),
+        ChannelPreset(name: "Announcements", url: "https://orfe.princeton.edu/live/announcements")
     ]
 
     @Published var streamURL: String

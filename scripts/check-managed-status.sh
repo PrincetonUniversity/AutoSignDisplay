@@ -40,12 +40,16 @@ else
 fi
 
 echo
-echo "2. channelPresetsManaged flag:"
+# Deliberately hedged. This is a live `defaults read`, and cfprefsd serves the app's
+# own writes from cache while it holds the domain open — so a managed run can report
+# "not set" here while the container plist in section 3 says true. Stating a
+# conclusion from this read alone sends people chasing a lock that is actually on.
+echo "2. channelPresetsManaged flag (live read — stale while the app is running):"
 MANAGED_FLAG="$(read_default channelPresetsManaged)"
 if echo "$MANAGED_FLAG" | grep -q "does not exist"; then
-  echo "   not set — presets are user-editable"
+  echo "   absent from the live read — inconclusive, see section 3"
 elif [[ "$MANAGED_FLAG" == "0" ]]; then
-  echo "   false — presets are user-editable"
+  echo "   false in the live read — see section 3 to confirm"
 else
   echo "   true — presets are locked to the managed list"
 fi

@@ -75,6 +75,28 @@ struct ChannelPreset: Equatable {
     }
 }
 
+/// What the retry timer should do about the current state of playback.
+enum PlaybackRecovery: Equatable {
+    case leaveAlone
+    case reload(reason: String)
+}
+
+/// The observable facts the recovery rules need, sampled from `AVPlayer`.
+///
+/// Kept separate from the player so the rules are testable. Driving a real AVPlayer
+/// into an expired signed URL or a frozen origin is not something a unit test can
+/// arrange, but every input that decides the outcome is a plain value.
+struct PlaybackSnapshot: Equatable {
+    var hasPlayer: Bool
+    var hasItem: Bool
+    var itemFailed: Bool
+    /// True when the player is not trying to play — never started, or paused on
+    /// purpose. A paused player is not a stalled one.
+    var isPaused: Bool
+    /// Wall-clock seconds since `currentTime()` last moved forward.
+    var secondsSinceProgress: TimeInterval
+}
+
 class StreamViewModel: ObservableObject {
     static let maxChannelPresets = 20
 
@@ -111,6 +133,51 @@ class StreamViewModel: ObservableObject {
     @Published var player: AVPlayer?
 
     private var retryTimer: Timer?
+
+    /// Progress clock backing stall detection.
+    private var lastObservedTime: CMTime = .invalid
+    private var lastProgressAt: Date?
+
+    /// How long playback may sit frozen before it counts as a failure.
+    ///
+    /// A live stream rebuffering for a few seconds is ordinary, so reacting at the
+    /// retry interval alone would thrash on an everyday hiccup. Three intervals with a
+    /// 15-second floor means the 5s default waits 15s — long enough to ignore a
+    /// rebuffer, short enough that a display heals while someone is still looking at it.
+    var stallThreshold: TimeInterval { max(15, retryTimeout * 3) }
+
+    /// Decides whether playback needs rebuilding.
+    ///
+    /// This replaces a condition that could never be true. The old rule was
+    /// `player?.currentItem == nil`, but AVPlayer does not nil `currentItem` when a
+    /// stream fails: a failed item stays put with `status == .failed`, and a frozen one
+    /// simply stops advancing. The only code that nils the player is `stopPlayback()`,
+    /// which also stops this timer. So Auto Resume recovered from nothing — not an
+    /// expired signed URL, not a dropped network, not an off-air source.
+    ///
+    /// Time-not-advancing is the primary signal deliberately. It does not depend on
+    /// which notification AVFoundation happens to post, and it catches every failure
+    /// mode that matters to an unattended display.
+    static func recoveryDecision(for snapshot: PlaybackSnapshot,
+                                 autoResume: Bool,
+                                 stoppedByUser: Bool,
+                                 stallThreshold: TimeInterval) -> PlaybackRecovery {
+        // An explicit stop outranks everything, Auto Resume included.
+        if stoppedByUser { return .leaveAlone }
+        guard autoResume else { return .leaveAlone }
+
+        if !snapshot.hasPlayer { return .reload(reason: "no player") }
+        if !snapshot.hasItem { return .reload(reason: "no player item") }
+        if snapshot.itemFailed { return .reload(reason: "player item failed") }
+
+        // Paused is a legitimate resting state, not a fault.
+        if snapshot.isPaused { return .leaveAlone }
+
+        if snapshot.secondsSinceProgress >= stallThreshold {
+            return .reload(reason: "stalled for \(Int(snapshot.secondsSinceProgress))s")
+        }
+        return .leaveAlone
+    }
 
     /// Set when the user explicitly stops playback, so neither the retry timer nor a
     /// scene-phase reactivation brings the player back. Deliberately in-memory only:
@@ -438,6 +505,7 @@ class StreamViewModel: ObservableObject {
     func playStream() {
         guard let url = URL(string: streamURL) else { return }
         playbackStoppedByUser = false
+        resetProgressTracking()
         player = AVPlayer(url: url)
         player?.play()
     }
@@ -447,6 +515,7 @@ class StreamViewModel: ObservableObject {
         // resurrect the player the user just dismissed.
         guard !playbackStoppedByUser else { return }
         guard let url = URL(string: streamURL) else { return }
+        resetProgressTracking()
         player = AVPlayer(url: url)
         if isPlayingOnOpen {
             player?.play()
@@ -457,13 +526,14 @@ class StreamViewModel: ObservableObject {
     /// Tears playback down. Leaving the fullscreen player only hides it — the
     /// AVPlayer keeps running (audible), so the main screen needs a way to end it.
     ///
-    /// Also stops the retry timer: its resume condition is `currentItem == nil`,
-    /// which a nil player satisfies, so it would otherwise rebuild the player
-    /// immediately when `autoResume` is on.
+    /// Also stops the retry timer. The watchdog treats a missing player as a fault to
+    /// repair, so leaving it running would rebuild the stream the user just ended —
+    /// `playbackStoppedByUser` guards the same case, and both are deliberate.
     func stopPlayback() {
         playbackStoppedByUser = true
         player?.pause()
         player = nil
+        resetProgressTracking()
         stopRetryTimer()
     }
 
@@ -479,28 +549,77 @@ class StreamViewModel: ObservableObject {
 
     private func startRetryTimer() {
         guard retryTimer == nil else { return }
-        retryTimer = Timer.scheduledTimer(withTimeInterval: retryTimeout, repeats: true) { _ in
+        // [weak self]: the timer is retained by this object, so a strong capture would
+        // keep the pair alive together.
+        retryTimer = Timer.scheduledTimer(withTimeInterval: retryTimeout, repeats: true) { [weak self] _ in
             DispatchQueue.main.async {
-                // Only attempt to auto-resume if enabled, and never against an
-                // explicit stop — a nil player satisfies the currentItem check below.
-                if self.autoResume,
-                   !self.playbackStoppedByUser,
-                   self.player?.currentItem == nil,
-                   let url = URL(string: self.streamURL) {
-                    self.logger.log("Auto-resuming stream: \(self.streamURL)")
-                    self.player = AVPlayer(url: url)
-                    if self.isPlayingOnOpen {
-                        self.player?.play()
-                    }
-                }
+                self?.evaluatePlaybackHealth()
             }
         }
     }
 
-    // Exposed for testing: emit the same auto-resume log message so tests can
-    // inject a TestLogger and assert the logger received the expected text.
-    func emitAutoResumeLogForTesting() {
-        logger.log("Auto-resuming stream: \(self.streamURL)")
+    /// One tick of the watchdog. Internal rather than private so a test can drive it
+    /// directly instead of waiting on a Timer.
+    func evaluatePlaybackHealth() {
+        switch StreamViewModel.recoveryDecision(for: samplePlayback(),
+                                                autoResume: autoResume,
+                                                stoppedByUser: playbackStoppedByUser,
+                                                stallThreshold: stallThreshold) {
+        case .leaveAlone:
+            break
+        case .reload(let reason):
+            reloadPlayer(reason: reason)
+        }
+    }
+
+    /// Samples the player, advancing the progress clock as a side effect.
+    private func samplePlayback(now: Date = Date()) -> PlaybackSnapshot {
+        guard let player else {
+            resetProgressTracking()
+            return PlaybackSnapshot(hasPlayer: false, hasItem: false, itemFailed: false,
+                                    isPaused: true, secondsSinceProgress: 0)
+        }
+
+        let current = player.currentTime()
+        let advanced = current.isValid && lastObservedTime.isValid && current > lastObservedTime
+        if lastProgressAt == nil || advanced {
+            lastProgressAt = now
+        }
+        lastObservedTime = current
+
+        return PlaybackSnapshot(
+            hasPlayer: true,
+            hasItem: player.currentItem != nil,
+            itemFailed: player.currentItem?.status == .failed,
+            isPaused: player.timeControlStatus == .paused,
+            secondsSinceProgress: now.timeIntervalSince(lastProgressAt ?? now)
+        )
+    }
+
+    private func resetProgressTracking() {
+        lastObservedTime = .invalid
+        lastProgressAt = nil
+    }
+
+    private func reloadPlayer(reason: String) {
+        guard let url = URL(string: streamURL) else { return }
+        logger.log(autoResumeLogMessage(reason: reason))
+        resetProgressTracking()
+        player = AVPlayer(url: url)
+        // Always play. Recovery only runs when playback was expected, so deferring to
+        // isPlayingOnOpen here would leave a repaired display sitting on a paused
+        // player. That flag governs launch, not repair.
+        player?.play()
+    }
+
+    private func autoResumeLogMessage(reason: String) -> String {
+        "Auto-resuming stream (\(reason)): \(streamURL)"
+    }
+
+    // Exposed for testing: emits exactly what a real recovery emits, so a test can
+    // assert the wording without driving an AVPlayer into a genuine failure.
+    func emitAutoResumeLogForTesting(reason: String = "no player item") {
+        logger.log(autoResumeLogMessage(reason: reason))
     }
 
     private func persistChannelPresets() {

@@ -20,6 +20,7 @@ struct LoggerTests {
         vm.emitAutoResumeLogForTesting()
 
         #expect(testLogger.messages.count == 1)
-        #expect(testLogger.messages.first == "Auto-resuming stream: https://example.com/stream.m3u8")
+        #expect(testLogger.messages.first
+                == "Auto-resuming stream (no player item): https://example.com/stream.m3u8")
     }
 }

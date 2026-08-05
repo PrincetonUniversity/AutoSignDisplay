@@ -120,6 +120,20 @@ def check_presentation() -> None:
     if "@FocusState" in presets:
         fail("presentation", "ChannelPresetsView declares @FocusState; the fields need no focus plumbing")
 
+    # The watchdog must outlive the main view disappearing. ContentView disappears when
+    # the fullscreen player is presented — the moment self-healing matters most — and
+    # also when Settings or Manage Presets is pushed.
+    for line in content.split("\n"):
+        if "onDisappear" in line:
+            following = region("onDisappear", content, 200) or ""
+            if "stopRetryTimer" in following:
+                fail("presentation",
+                     "ContentView stops the retry timer in onDisappear. That fires when the "
+                     "fullscreen player is presented, killing the watchdog exactly when it is "
+                     "needed. Backgrounding is handled by scenePhase; an explicit stop by "
+                     "stopPlayback().")
+            break
+
     labeled = body("struct LabeledTextField: View {", code("SettingsView.swift"))
     if labeled is None:
         fail("presentation", "LabeledTextField not found in SettingsView.swift")

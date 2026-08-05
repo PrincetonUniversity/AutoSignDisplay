@@ -143,6 +143,12 @@ class StreamViewModel: ObservableObject {
     /// `.paused` covers both a deliberate pause and a stream it has given up on.
     private var playbackIntended = false
 
+    /// Last state reported to the log, so transitions are recorded and steady state is not.
+    private var lastLoggedPlaybackState: String?
+
+    /// When the watchdog last rebuilt playback, for the cooldown above.
+    private var lastReloadAt: Date?
+
     /// Progress clock backing stall detection.
     private var lastObservedTime: CMTime = .invalid
     private var lastProgressAt: Date?
@@ -170,7 +176,8 @@ class StreamViewModel: ObservableObject {
     static func recoveryDecision(for snapshot: PlaybackSnapshot,
                                  autoResume: Bool,
                                  stoppedByUser: Bool,
-                                 stallThreshold: TimeInterval) -> PlaybackRecovery {
+                                 stallThreshold: TimeInterval,
+                                 secondsSinceLastReload: TimeInterval = .infinity) -> PlaybackRecovery {
         // An explicit stop outranks everything, Auto Resume included.
         if stoppedByUser { return .leaveAlone }
         guard autoResume else { return .leaveAlone }
@@ -179,6 +186,12 @@ class StreamViewModel: ObservableObject {
         // startStreamIfNeeded() builds a player without playing when PlayOnAppOpen is
         // off, and repairing that would start a stream nobody asked for.
         if !snapshot.intendsToPlay { return .leaveAlone }
+
+        // A freshly rebuilt stream needs time to load before being judged. Without
+        // this, an outage rebuilds every retry interval and no attempt ever gets long
+        // enough to establish — which looks like a permanently spinning display even
+        // after the network comes back.
+        if secondsSinceLastReload < stallThreshold { return .leaveAlone }
 
         if !snapshot.hasPlayer { return .reload(reason: "no player") }
         if !snapshot.hasItem { return .reload(reason: "no player item") }
@@ -532,6 +545,18 @@ class StreamViewModel: ObservableObject {
         // resurrect the player the user just dismissed.
         guard !playbackStoppedByUser else { return }
         guard let url = URL(string: streamURL) else { return }
+
+        // "IfNeeded" has to mean it. This runs on every appearance and every
+        // scenePhase == .active, including when the fullscreen player is presented —
+        // and rebuilding an already-running stream there both interrupted playback and
+        // reset `playbackIntended` to PlayOnAppOpen, which is false for a stream the
+        // user started by hand. The watchdog then saw intends=false and declined to
+        // repair anything for the rest of the session.
+        if player != nil {
+            startRetryTimer()
+            return
+        }
+
         resetProgressTracking()
         playbackIntended = isPlayingOnOpen
         player = AVPlayer(url: url)
@@ -539,6 +564,15 @@ class StreamViewModel: ObservableObject {
             player?.play()
         }
         startRetryTimer()
+    }
+
+    /// One line stating everything that governs self-healing, at startup and whenever
+    /// the settings behind it change. On an unattended display this is the difference
+    /// between "the watchdog is off" and a mystery.
+    private func logRecoveryConfiguration(_ context: String) {
+        logger.log("Recovery config (\(context)): autoResume=\(autoResume) "
+                   + "retryTimeout=\(retryTimeout)s stallThreshold=\(stallThreshold)s "
+                   + "playOnAppOpen=\(isPlayingOnOpen)")
     }
 
     /// Tears playback down. Leaving the fullscreen player only hides it — the
@@ -568,6 +602,7 @@ class StreamViewModel: ObservableObject {
 
     private func startRetryTimer() {
         guard retryTimer == nil else { return }
+        logRecoveryConfiguration("timer start")
         // [weak self]: the timer is retained by this object, so a strong capture would
         // keep the pair alive together.
         retryTimer = Timer.scheduledTimer(withTimeInterval: retryTimeout, repeats: true) { [weak self] _ in
@@ -580,10 +615,32 @@ class StreamViewModel: ObservableObject {
     /// One tick of the watchdog. Internal rather than private so a test can drive it
     /// directly instead of waiting on a Timer.
     func evaluatePlaybackHealth() {
-        switch StreamViewModel.recoveryDecision(for: samplePlayback(),
+        let sinceReload = lastReloadAt.map { Date().timeIntervalSince($0) } ?? .infinity
+        let snapshot = samplePlayback()
+        // Notice level, but only when something changed. Debug-level os_log is not
+        // persisted to the log store, so `log show` on a device could never retrieve it
+        // — which is exactly the situation an unattended display puts you in. Logging
+        // every tick at notice would be far too noisy, so this reports transitions.
+        let state = "player=\(snapshot.hasPlayer) item=\(snapshot.hasItem) "
+            + "failed=\(snapshot.itemFailed) intends=\(snapshot.intendsToPlay) "
+            + "idleHealthy=\(snapshot.looksHealthyButIdle) stalled=\(snapshot.secondsSinceProgress >= stallThreshold)"
+        if state != lastLoggedPlaybackState {
+            lastLoggedPlaybackState = state
+            logger.log("Playback state: \(state) "
+                       + "sinceProgress=\(String(format: "%.0f", snapshot.secondsSinceProgress))s")
+        }
+        logger.debug("watchdog: player=\(snapshot.hasPlayer) item=\(snapshot.hasItem) "
+                     + "failed=\(snapshot.itemFailed) intends=\(snapshot.intendsToPlay) "
+                     + "idleHealthy=\(snapshot.looksHealthyButIdle) "
+                     + "sinceProgress=\(String(format: "%.1f", snapshot.secondsSinceProgress))s "
+                     + "sinceReload=\(sinceReload.isFinite ? String(format: "%.1f", sinceReload) : "never") "
+                     + "autoResume=\(autoResume) stopped=\(playbackStoppedByUser) "
+                     + "threshold=\(stallThreshold)s")
+        switch StreamViewModel.recoveryDecision(for: snapshot,
                                                 autoResume: autoResume,
                                                 stoppedByUser: playbackStoppedByUser,
-                                                stallThreshold: stallThreshold) {
+                                                stallThreshold: stallThreshold,
+                                                secondsSinceLastReload: sinceReload) {
         case .leaveAlone:
             break
         case .reload(let reason):
@@ -631,11 +688,24 @@ class StreamViewModel: ObservableObject {
         logger.log(autoResumeLogMessage(reason: reason))
         resetProgressTracking()
         playbackIntended = true
-        player = AVPlayer(url: url)
+        lastReloadAt = Date()
+
+        if let existing = player {
+            // Swap the item rather than the player. A presented AVPlayerViewController
+            // holds its own reference to the AVPlayer instance, so assigning a new one
+            // to `player` left the on-screen controller attached to the dead player —
+            // the picture stayed frozen forever while the view model quietly held a
+            // healthy replacement. Reusing the instance re-points what is on screen.
+            existing.replaceCurrentItem(with: AVPlayerItem(url: url))
+            existing.play()
+        } else {
+            let fresh = AVPlayer(url: url)
+            player = fresh
+            fresh.play()
+        }
         // Always play. Recovery only runs when playback was expected, so deferring to
         // isPlayingOnOpen here would leave a repaired display sitting on a paused
         // player. That flag governs launch, not repair.
-        player?.play()
     }
 
     private func autoResumeLogMessage(reason: String) -> String {

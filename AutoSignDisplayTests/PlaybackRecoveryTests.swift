@@ -36,11 +36,40 @@ struct PlaybackRecoveryTests {
     private func decide(_ snapshot: PlaybackSnapshot,
                         autoResume: Bool = true,
                         stoppedByUser: Bool = false,
-                        stallThreshold: TimeInterval = 15) -> PlaybackRecovery {
+                        stallThreshold: TimeInterval = 15,
+                        secondsSinceLastReload: TimeInterval = .infinity) -> PlaybackRecovery {
         StreamViewModel.recoveryDecision(for: snapshot,
                                          autoResume: autoResume,
                                          stoppedByUser: stoppedByUser,
-                                         stallThreshold: stallThreshold)
+                                         stallThreshold: stallThreshold,
+                                         secondsSinceLastReload: secondsSinceLastReload)
+    }
+
+    // MARK: - Cooldown after a rebuild
+
+    @Test func aFreshlyRebuiltStreamIsGivenTimeToLoad() {
+        // The regression this prevents: during an outage every retry interval rebuilt
+        // playback, so no attempt ever had long enough to establish. The display span
+        // spinning indefinitely even after the network returned.
+        var failed = healthy()
+        failed.itemFailed = true
+        #expect(decide(failed, secondsSinceLastReload: 1) == .leaveAlone)
+        #expect(decide(failed, secondsSinceLastReload: 14.9) == .leaveAlone)
+    }
+
+    @Test func theCooldownExpiresSoRepairCanBeRetried() {
+        // An outage that outlasts one attempt still has to be retried, or the first
+        // failed rebuild would be the last.
+        var failed = healthy()
+        failed.itemFailed = true
+        #expect(decide(failed, secondsSinceLastReload: 15) == .reload(reason: "player item failed"))
+        #expect(decide(failed, secondsSinceLastReload: 600) == .reload(reason: "player item failed"))
+    }
+
+    @Test func theCooldownNeverOutranksAnExplicitStop() {
+        var failed = healthy()
+        failed.itemFailed = true
+        #expect(decide(failed, stoppedByUser: true, secondsSinceLastReload: 600) == .leaveAlone)
     }
 
     // MARK: - The failure that motivated all of this

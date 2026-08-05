@@ -276,9 +276,11 @@ struct ContentView: View {
                 viewModel.startStreamIfNeeded()
                 scheduleAutoPlayPresentation()
             }
-            .onDisappear {
-                viewModel.stopRetryTimer()
-            }
+            // Deliberately no .onDisappear { stopRetryTimer() }. This view disappears
+            // when the fullscreen player is presented and when Settings or Manage
+            // Presets is pushed — none of which are reasons to stop self-healing, and
+            // the first is precisely when it matters most. Backgrounding is handled
+            // below; an explicit stop is handled in stopPlayback().
             .onChangeOld(of: scenePhase) { _, newPhase in
                 switch newPhase {
                 case .active:

@@ -123,6 +123,44 @@ struct AutoSignDisplayTests {
         #expect(vm.player != nil, "A rebuild should leave a player in place")
     }
 
+    /// The bug that made three live tests fail: presenting the fullscreen player
+    /// re-runs startStreamIfNeeded(), which rebuilt the player and reset
+    /// `playbackIntended` to PlayOnAppOpen — false for a stream started by hand. The
+    /// watchdog then saw intends=false and repaired nothing for the rest of the session.
+    @Test func startingAStreamByHandSurvivesTheViewReappearing() async throws {
+        await resetDefaults()
+        UserDefaults.standard.set(true, forKey: ContentView.autoResumeKey)
+        UserDefaults.standard.set(false, forKey: ContentView.playOnOpenKey)
+
+        let logger = CollectingLogger()
+        let vm = await MainActor.run { StreamViewModel(logger: logger) }
+        defer { vm.stopRetryTimer() }
+
+        await MainActor.run {
+            vm.updateStreamURL("https://invalid.invalid.example/nope.m3u8")
+            vm.playStream()
+        }
+        let started = await MainActor.run { vm.player }
+        #expect(started != nil)
+
+        // What presenting the player, or a scenePhase change, triggers.
+        await MainActor.run { vm.startStreamIfNeeded() }
+
+        // The running player must survive untouched — rebuilding it interrupted
+        // playback as well as resetting intent.
+        #expect(await MainActor.run { vm.player } === started,
+                "startStreamIfNeeded must not rebuild a stream that is already running")
+
+        for _ in 0..<40 {
+            if await MainActor.run(body: { vm.player?.currentItem?.status == .failed }) { break }
+            try await Task.sleep(nanoseconds: 250_000_000)
+        }
+        await MainActor.run { vm.evaluatePlaybackHealth() }
+
+        #expect(logger.messages.contains { $0.contains("Auto-resuming") },
+                "Intent must survive reappearance. Logged: \(logger.messages)")
+    }
+
     @Test func theWatchdogLeavesAStreamAloneWhenAutoResumeIsOff() async throws {
         await resetDefaults()
         UserDefaults.standard.set(false, forKey: ContentView.autoResumeKey)
@@ -141,7 +179,11 @@ struct AutoSignDisplayTests {
         }
 
         await MainActor.run { vm.evaluatePlaybackHealth() }
-        #expect(logger.messages.isEmpty == true,
+        // Asserts on repair specifically, not on silence: the watchdog also reports
+        // configuration and state transitions, which it should keep doing with Auto
+        // Resume off — that is how you diagnose a display that is deliberately not
+        // healing itself.
+        #expect(!logger.messages.contains { $0.contains("Auto-resuming") },
                 "Auto Resume off must suppress repair entirely. Logged: \(logger.messages)")
     }
 

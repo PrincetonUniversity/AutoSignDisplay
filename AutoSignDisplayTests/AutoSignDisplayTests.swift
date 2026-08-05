@@ -73,6 +73,78 @@ struct AutoSignDisplayTests {
         func log(_ message: String) {}
     }
 
+    /// Keeps what it was told, so a test can assert the watchdog actually spoke.
+    private final class CollectingLogger: Logger {
+        var messages: [String] = []
+        func log(_ message: String) { messages.append(message) }
+    }
+
+    /// End-to-end proof that sampling, the decision and the rebuild are wired together.
+    ///
+    /// The unit tests in PlaybackRecoveryTests cover the rules against plain values;
+    /// this covers the part they cannot — that a real AVPlayer in a real failure state
+    /// is sampled into a snapshot the rules recognise. An unresolvable host drives the
+    /// item to `.failed`, which is the state an expired signed URL also produces, and
+    /// needs no network to reproduce.
+    ///
+    /// This is the check that would have caught the bug this test was written after: the
+    /// first implementation asked the player whether it was paused and treated that as
+    /// "nobody wants playback". AVPlayer reports `.paused` for a stream it has stalled
+    /// out on too, so the guard swallowed every real failure and the watchdog never
+    /// fired in a running app.
+    @Test func theWatchdogRebuildsAStreamThePlayerHasGivenUpOn() async throws {
+        await resetDefaults()
+        UserDefaults.standard.set(true, forKey: ContentView.autoResumeKey)
+
+        let logger = CollectingLogger()
+        let vm = await MainActor.run { StreamViewModel(logger: logger) }
+        defer { vm.stopRetryTimer() }
+
+        await MainActor.run {
+            vm.updateStreamURL("https://invalid.invalid.example/nope.m3u8")
+            vm.playStream()
+        }
+
+        // Give AVPlayer time to conclude the host does not exist.
+        var reachedFailure = false
+        for _ in 0..<40 {
+            if await MainActor.run(body: { vm.player?.currentItem?.status == .failed }) {
+                reachedFailure = true
+                break
+            }
+            try await Task.sleep(nanoseconds: 250_000_000)
+        }
+        #expect(reachedFailure, "AVPlayer should mark an unresolvable stream as failed")
+
+        await MainActor.run { vm.evaluatePlaybackHealth() }
+
+        #expect(logger.messages.contains { $0.contains("Auto-resuming") },
+                "The watchdog should have rebuilt the player. Logged: \(logger.messages)")
+        #expect(vm.player != nil, "A rebuild should leave a player in place")
+    }
+
+    @Test func theWatchdogLeavesAStreamAloneWhenAutoResumeIsOff() async throws {
+        await resetDefaults()
+        UserDefaults.standard.set(false, forKey: ContentView.autoResumeKey)
+
+        let logger = CollectingLogger()
+        let vm = await MainActor.run { StreamViewModel(logger: logger) }
+        defer { vm.stopRetryTimer() }
+
+        await MainActor.run {
+            vm.updateStreamURL("https://invalid.invalid.example/nope.m3u8")
+            vm.playStream()
+        }
+        for _ in 0..<40 {
+            if await MainActor.run(body: { vm.player?.currentItem?.status == .failed }) { break }
+            try await Task.sleep(nanoseconds: 250_000_000)
+        }
+
+        await MainActor.run { vm.evaluatePlaybackHealth() }
+        #expect(logger.messages.isEmpty == true,
+                "Auto Resume off must suppress repair entirely. Logged: \(logger.messages)")
+    }
+
     /// Reads channelPresets in either the new dict form or the legacy string form.
     /// Returns just the URLs — most tests only care about URL identity.
     private func persistedPresetURLs(_ defaults: UserDefaults) -> [String] {

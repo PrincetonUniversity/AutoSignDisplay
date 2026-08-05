@@ -90,9 +90,14 @@ struct PlaybackSnapshot: Equatable {
     var hasPlayer: Bool
     var hasItem: Bool
     var itemFailed: Bool
-    /// True when the player is not trying to play — never started, or paused on
-    /// purpose. A paused player is not a stalled one.
-    var isPaused: Bool
+    /// Whether *the app* wants playback right now. Deliberately not derived from
+    /// `timeControlStatus`: AVPlayer reports `.paused` both for a user pause and for a
+    /// stream it has stalled out on, so asking the player about intent conflates the
+    /// case to ignore with the case to repair.
+    var intendsToPlay: Bool
+    /// The player is idle but nothing is wrong with it — ready to play, buffer not
+    /// empty. That is a real pause, as opposed to a freeze.
+    var looksHealthyButIdle: Bool
     /// Wall-clock seconds since `currentTime()` last moved forward.
     var secondsSinceProgress: TimeInterval
 }
@@ -134,6 +139,10 @@ class StreamViewModel: ObservableObject {
 
     private var retryTimer: Timer?
 
+    /// Whether the app wants playback. The watchdog needs this because AVPlayer's
+    /// `.paused` covers both a deliberate pause and a stream it has given up on.
+    private var playbackIntended = false
+
     /// Progress clock backing stall detection.
     private var lastObservedTime: CMTime = .invalid
     private var lastProgressAt: Date?
@@ -166,12 +175,19 @@ class StreamViewModel: ObservableObject {
         if stoppedByUser { return .leaveAlone }
         guard autoResume else { return .leaveAlone }
 
+        // Intent first. If the app is not trying to play, nothing here is a fault —
+        // startStreamIfNeeded() builds a player without playing when PlayOnAppOpen is
+        // off, and repairing that would start a stream nobody asked for.
+        if !snapshot.intendsToPlay { return .leaveAlone }
+
         if !snapshot.hasPlayer { return .reload(reason: "no player") }
         if !snapshot.hasItem { return .reload(reason: "no player item") }
         if snapshot.itemFailed { return .reload(reason: "player item failed") }
 
-        // Paused is a legitimate resting state, not a fault.
-        if snapshot.isPaused { return .leaveAlone }
+        // Idle but healthy means somebody pressed pause in the player, which is a
+        // resting state rather than a freeze. A stalled player is *also* reported as
+        // paused, which is why this needs the item's health and not just its status.
+        if snapshot.looksHealthyButIdle { return .leaveAlone }
 
         if snapshot.secondsSinceProgress >= stallThreshold {
             return .reload(reason: "stalled for \(Int(snapshot.secondsSinceProgress))s")
@@ -505,6 +521,7 @@ class StreamViewModel: ObservableObject {
     func playStream() {
         guard let url = URL(string: streamURL) else { return }
         playbackStoppedByUser = false
+        playbackIntended = true
         resetProgressTracking()
         player = AVPlayer(url: url)
         player?.play()
@@ -516,6 +533,7 @@ class StreamViewModel: ObservableObject {
         guard !playbackStoppedByUser else { return }
         guard let url = URL(string: streamURL) else { return }
         resetProgressTracking()
+        playbackIntended = isPlayingOnOpen
         player = AVPlayer(url: url)
         if isPlayingOnOpen {
             player?.play()
@@ -531,6 +549,7 @@ class StreamViewModel: ObservableObject {
     /// `playbackStoppedByUser` guards the same case, and both are deliberate.
     func stopPlayback() {
         playbackStoppedByUser = true
+        playbackIntended = false
         player?.pause()
         player = nil
         resetProgressTracking()
@@ -577,7 +596,8 @@ class StreamViewModel: ObservableObject {
         guard let player else {
             resetProgressTracking()
             return PlaybackSnapshot(hasPlayer: false, hasItem: false, itemFailed: false,
-                                    isPaused: true, secondsSinceProgress: 0)
+                                    intendsToPlay: playbackIntended,
+                                    looksHealthyButIdle: false, secondsSinceProgress: 0)
         }
 
         let current = player.currentTime()
@@ -587,11 +607,16 @@ class StreamViewModel: ObservableObject {
         }
         lastObservedTime = current
 
+        let item = player.currentItem
+        let idle = player.timeControlStatus == .paused
         return PlaybackSnapshot(
             hasPlayer: true,
-            hasItem: player.currentItem != nil,
-            itemFailed: player.currentItem?.status == .failed,
-            isPaused: player.timeControlStatus == .paused,
+            hasItem: item != nil,
+            itemFailed: item?.status == .failed,
+            intendsToPlay: playbackIntended,
+            looksHealthyButIdle: idle
+                && item?.status == .readyToPlay
+                && item?.isPlaybackBufferEmpty == false,
             secondsSinceProgress: now.timeIntervalSince(lastProgressAt ?? now)
         )
     }
@@ -605,6 +630,7 @@ class StreamViewModel: ObservableObject {
         guard let url = URL(string: streamURL) else { return }
         logger.log(autoResumeLogMessage(reason: reason))
         resetProgressTracking()
+        playbackIntended = true
         player = AVPlayer(url: url)
         // Always play. Recovery only runs when playback was expected, so deferring to
         // isPlayingOnOpen here would leave a repaired display sitting on a paused

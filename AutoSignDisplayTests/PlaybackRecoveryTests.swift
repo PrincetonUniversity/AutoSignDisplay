@@ -29,7 +29,8 @@ struct PlaybackRecoveryTests {
     /// Healthy live playback: an item, not paused, time moving.
     private func healthy(secondsSinceProgress: TimeInterval = 0) -> PlaybackSnapshot {
         PlaybackSnapshot(hasPlayer: true, hasItem: true, itemFailed: false,
-                         isPaused: false, secondsSinceProgress: secondsSinceProgress)
+                         intendsToPlay: true, looksHealthyButIdle: false,
+                         secondsSinceProgress: secondsSinceProgress)
     }
 
     private func decide(_ snapshot: PlaybackSnapshot,
@@ -69,12 +70,20 @@ struct PlaybackRecoveryTests {
         #expect(decide(snapshot) == .reload(reason: "no player item"))
     }
 
-    @Test func aMissingPlayerIsRecovered() {
+    @Test func aMissingPlayerIsRecoveredWhenPlaybackWasIntended() {
         let snapshot = PlaybackSnapshot(hasPlayer: false, hasItem: false, itemFailed: false,
-                                        isPaused: true, secondsSinceProgress: 0)
-        // Note this outranks the isPaused check: a snapshot with no player reports
-        // paused, and it still has to be repaired.
+                                        intendsToPlay: true, looksHealthyButIdle: false,
+                                        secondsSinceProgress: 0)
         #expect(decide(snapshot) == .reload(reason: "no player"))
+    }
+
+    @Test func aMissingPlayerIsLeftAloneWhenPlaybackWasNeverIntended() {
+        // Intent is checked before the player-shape faults on purpose: repairing this
+        // would start a stream nobody asked for.
+        let snapshot = PlaybackSnapshot(hasPlayer: false, hasItem: false, itemFailed: false,
+                                        intendsToPlay: false, looksHealthyButIdle: false,
+                                        secondsSinceProgress: 0)
+        #expect(decide(snapshot) == .leaveAlone)
     }
 
     // MARK: - What must NOT be disturbed
@@ -91,13 +100,34 @@ struct PlaybackRecoveryTests {
         #expect(decide(healthy(secondsSinceProgress: 14.9)) == .leaveAlone)
     }
 
-    @Test func aDeliberatelyPausedPlayerIsNotAStalledOne() {
-        // A player can legitimately exist and be paused: startStreamIfNeeded() creates
-        // one without playing when PlayOnAppOpen is off. Its clock is not advancing,
-        // and that is not a fault.
+    @Test func aPlayerPausedByHandIsNotAStalledOne() {
+        // Paused, but the item is ready and the buffer is not empty — somebody pressed
+        // pause. Distinguished from a freeze by the item's health, because AVPlayer
+        // reports `.paused` for both.
         var snapshot = healthy(secondsSinceProgress: 3600)
-        snapshot.isPaused = true
+        snapshot.looksHealthyButIdle = true
         #expect(decide(snapshot) == .leaveAlone)
+    }
+
+    @Test func aStreamNeverStartedIsNotAStalledOne() {
+        // startStreamIfNeeded() builds a player without playing when PlayOnAppOpen is
+        // off. Its clock never advances, and that is not a fault.
+        var snapshot = healthy(secondsSinceProgress: 3600)
+        snapshot.intendsToPlay = false
+        #expect(decide(snapshot) == .leaveAlone)
+    }
+
+    @Test func aFrozenPlayerIsNotMistakenForAPausedOne() {
+        // The bug this whole file exists to prevent. AVPlayer reports `.paused` for a
+        // stream it has stalled out on, so a snapshot built from timeControlStatus alone
+        // could not tell this apart from the test above — and the watchdog never fired
+        // in a running app as a result. Here the item is NOT healthy, so it is a freeze.
+        var snapshot = healthy(secondsSinceProgress: 30)
+        snapshot.looksHealthyButIdle = false
+        guard case .reload = decide(snapshot) else {
+            Issue.record("A frozen player must be repaired, not treated as paused")
+            return
+        }
     }
 
     @Test func anExplicitStopIsNeverUndone() {
@@ -105,7 +135,8 @@ struct PlaybackRecoveryTests {
         // treats a missing player as a fault, so without this the display would
         // resurrect the stream the user just ended.
         let stopped = PlaybackSnapshot(hasPlayer: false, hasItem: false, itemFailed: false,
-                                       isPaused: true, secondsSinceProgress: 0)
+                                       intendsToPlay: false, looksHealthyButIdle: false,
+                                       secondsSinceProgress: 0)
         #expect(decide(stopped, stoppedByUser: true) == .leaveAlone)
 
         // And it outranks every other fault, not just the missing player.
@@ -123,7 +154,8 @@ struct PlaybackRecoveryTests {
         #expect(decide(healthy(secondsSinceProgress: 600), autoResume: false) == .leaveAlone)
 
         let noPlayer = PlaybackSnapshot(hasPlayer: false, hasItem: false, itemFailed: false,
-                                        isPaused: true, secondsSinceProgress: 0)
+                                        intendsToPlay: true, looksHealthyButIdle: false,
+                                        secondsSinceProgress: 0)
         #expect(decide(noPlayer, autoResume: false) == .leaveAlone)
     }
 

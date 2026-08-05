@@ -190,21 +190,40 @@ This applies to `PlayOnAppOpen`, `AutoResume`, `SettingsDisabled`, and
 
 ## Applying a changed payload
 
-**The app reads managed configuration once, at launch.** `applyConfiguration()` runs
-in the app's `init()`, so a payload you change in Jamf does not take effect until the
-app's process restarts. Backgrounding is not enough on tvOS — force-quit it
-(double-press TV, swipe up) or reboot the device.
+**Configuration is declarative from 1.1 onward.** The app reconciles to the payload
+while running: change it in Jamf and displays follow within seconds, including
+switching the playing channel when `DefaultChannel` changes. No restart, no visit.
 
-This matters operationally, not just while testing: changing the channel list for a
-wall-mounted display currently needs the app restarted. Until that changes, a
-Jamf-scheduled nightly restart is the practical way to make configuration changes
-land without visiting the device.
+How a change is noticed, in order of reliability:
 
-Treating the payload as declarative — the app noticing a changed payload and
-reconciling to it live, including switching the playing channel — is planned for 1.1.
-It needs the configuration re-applied when the managed dictionary changes and the
-view model reloaded from defaults, and it has to avoid reacting to the app's *own*
-writes to `UserDefaults`, which would otherwise loop.
+1. **Polled** on the playback watchdog's existing tick — a dictionary comparison every
+   few seconds. This is the mechanism to rely on.
+2. **`UserDefaults.didChangeNotification`**, when the platform delivers one. Treated as
+   an optimisation, not a dependency: whether it fires for an externally written payload
+   has not been verifiable outside a genuinely managed device.
+3. **On returning to the foreground**, for a payload that landed while suspended.
+
+Changes are coalesced over 1.5 seconds, so a push that writes the dictionary more than
+once switches the channel once rather than twice.
+
+A reconcile overwrites whatever a local user was part-way through typing. That is
+deliberate — the payload is the desired state, and a managed install locks those fields
+anyway.
+
+### In 1.0
+
+1.0 reads configuration **once, in the app's `init()`**. A payload changed in Jamf does
+nothing until the app's process restarts, and backgrounding is not enough on tvOS —
+force-quit it (double-press TV, swipe up) or reboot. A Jamf-scheduled nightly restart is
+the practical workaround on that version.
+
+### Why `defaults import` is a poor test of this
+
+Importing a payload while the app is running does not exercise the reconcile path: the
+app's own preference write-back clobbers the `com.apple.configuration.managed` key you
+just imported, so the app never sees it. Verified — the key is simply absent from the
+container plist afterwards. Reconcile behaviour can only be confirmed on a device that
+receives a real MDM payload.
 
 ## TestFlight cannot test any of this
 

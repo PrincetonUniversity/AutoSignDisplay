@@ -7,6 +7,11 @@
 import Foundation
 
 struct AppConfigKeys {
+    /// The dictionary the platform delivers managed app configuration in. Named here
+    /// rather than spelled out at each use: ManagedConfigurationWatcher has to read
+    /// exactly the same key to tell a payload change from the app's own writes.
+    static let managedConfiguration = "com.apple.configuration.managed"
+
     static let playOnOpen = "PlayOnAppOpen"
     static let retryTimeout = "RetryTimeout"
     static let streamURL = "StreamURL"
@@ -30,7 +35,7 @@ class AppConfig {
         defaults.set(false, forKey: ContentView.channelPresetsManagedKey)
         defaults.set(false, forKey: ContentView.settingsPINManagedKey)
 
-        guard let managedConfig = defaults.dictionary(forKey: "com.apple.configuration.managed") else {
+        guard let managedConfig = defaults.dictionary(forKey: AppConfigKeys.managedConfiguration) else {
             if previouslyManaged {
                 defaults.set(StreamViewModel.defaultPresets.map { $0.dictionaryRepresentation },
                              forKey: ContentView.channelPresetsKey)
@@ -113,7 +118,7 @@ class AppConfig {
             }
 
             let defaults = UserDefaults.standard
-            defaults.set(fileContents, forKey: "com.apple.configuration.managed")
+            defaults.set(fileContents, forKey: AppConfigKeys.managedConfiguration)
             defaults.synchronize()
 
             logger.log("Loaded configuration from '\(filename).plist'")

@@ -161,6 +161,112 @@ struct AutoSignDisplayTests {
                 "Intent must survive reappearance. Logged: \(logger.messages)")
     }
 
+    // MARK: - Declarative managed configuration
+
+    @Test func reloadFromDefaultsPicksUpEveryManagedSetting() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        let vm = await MainActor.run { StreamViewModel(logger: TestLogger()) }
+        defer { vm.stopRetryTimer() }
+
+        // Nothing managed to begin with.
+        #expect(vm.displayTitle == "")
+        #expect(vm.viewOnlyMode == false)
+
+        // A payload lands while the app is running.
+        await MainActor.run {
+            defaults.set([
+                AppConfigKeys.displayTitle: "Engineering Quad",
+                AppConfigKeys.viewOnlyMode: true,
+                AppConfigKeys.autoResume: true,
+                AppConfigKeys.retryTimeout: 12.0,
+                AppConfigKeys.channelPresets: [["Name": "Only", "URL": "https://only.example/1.m3u8"]],
+                AppConfigKeys.defaultChannel: "https://only.example/1.m3u8",
+            ], forKey: AppConfigKeys.managedConfiguration)
+            AppConfig.applyConfiguration(logger: TestLogger())
+            vm.reloadFromDefaults()
+        }
+
+        // Guards drift: a setting added later that reloadFromDefaults forgets would be
+        // invisible until someone changed it by MDM in the field.
+        #expect(vm.displayTitle == "Engineering Quad")
+        #expect(vm.viewOnlyMode == true)
+        #expect(vm.autoResume == true)
+        #expect(vm.retryTimeout == 12.0)
+        #expect(vm.channelPresetsManaged == true)
+        #expect(vm.channelPresets.count == 1)
+        #expect(vm.channelPresets.first?.name == "Only")
+        #expect(vm.streamURL == "https://only.example/1.m3u8")
+    }
+
+    @Test func aChangedDefaultChannelSwitchesAPlayingStream() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        let logger = CollectingLogger()
+
+        await MainActor.run {
+            defaults.set([
+                AppConfigKeys.channelPresets: [["Name": "First", "URL": "https://first.example/1.m3u8"]],
+                AppConfigKeys.defaultChannel: "https://first.example/1.m3u8",
+            ], forKey: AppConfigKeys.managedConfiguration)
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+
+        let vm = await MainActor.run { StreamViewModel(logger: logger) }
+        defer { vm.stopRetryTimer() }
+        await MainActor.run { vm.playStream() }
+        let original = await MainActor.run { vm.player }
+        #expect(original != nil)
+        #expect(vm.streamURL == "https://first.example/1.m3u8")
+
+        // The administrator repoints the display.
+        await MainActor.run {
+            defaults.set([
+                AppConfigKeys.channelPresets: [["Name": "Second", "URL": "https://second.example/2.m3u8"]],
+                AppConfigKeys.defaultChannel: "https://second.example/2.m3u8",
+            ], forKey: AppConfigKeys.managedConfiguration)
+            AppConfig.applyConfiguration(logger: TestLogger())
+            vm.reloadFromDefaults()
+        }
+
+        #expect(vm.streamURL == "https://second.example/2.m3u8")
+        // Same AVPlayer instance, new item: a presented AVPlayerViewController holds the
+        // instance, so replacing it would leave the screen on the old channel.
+        #expect(await MainActor.run { vm.player } === original,
+                "The player instance must be reused so the presented controller follows")
+        #expect(logger.messages.contains { $0.contains("Managed configuration changed the stream") },
+                "Logged: \(logger.messages)")
+    }
+
+    @Test func anUnchangedPayloadDoesNotDisturbPlayback() async throws {
+        await resetDefaults()
+        let defaults = UserDefaults.standard
+        let logger = CollectingLogger()
+
+        await MainActor.run {
+            defaults.set([
+                AppConfigKeys.channelPresets: [["Name": "One", "URL": "https://one.example/1.m3u8"]],
+                AppConfigKeys.defaultChannel: "https://one.example/1.m3u8",
+            ], forKey: AppConfigKeys.managedConfiguration)
+            AppConfig.applyConfiguration(logger: TestLogger())
+        }
+
+        let vm = await MainActor.run { StreamViewModel(logger: logger) }
+        defer { vm.stopRetryTimer() }
+        await MainActor.run { vm.playStream() }
+        let original = await MainActor.run { vm.player }
+
+        // Re-applying the same configuration must be inert — MDM re-pushes routinely.
+        await MainActor.run {
+            AppConfig.applyConfiguration(logger: TestLogger())
+            vm.reloadFromDefaults()
+        }
+
+        #expect(await MainActor.run { vm.player } === original)
+        #expect(!logger.messages.contains { $0.contains("Managed configuration changed the stream") },
+                "An unchanged payload must not restart playback. Logged: \(logger.messages)")
+    }
+
     @Test func theWatchdogLeavesAStreamAloneWhenAutoResumeIsOff() async throws {
         await resetDefaults()
         UserDefaults.standard.set(false, forKey: ContentView.autoResumeKey)

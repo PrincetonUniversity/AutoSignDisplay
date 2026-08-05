@@ -14,6 +14,7 @@
 		E66666666666666666666666 /* AutoSignDisplay/SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D66666666666666666666666 /* AutoSignDisplay/SettingsView.swift */; };
 		E77777777777777777777777 /* AutoSignDisplay/OnChangeOld.swift in Sources */ = {isa = PBXBuildFile; fileRef = D77777777777777777777777 /* AutoSignDisplay/OnChangeOld.swift */; };
 		E88888888888888888888888 /* AutoSignDisplay/Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = D88888888888888888888888 /* AutoSignDisplay/Logger.swift */; };
+		EA11111111111111111111AA /* AutoSignDisplay/ManagedConfigurationWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA11111111111111111111AA /* AutoSignDisplay/ManagedConfigurationWatcher.swift */; };
 		E99999999999999999999990 /* AutoSignDisplay/ChannelPresetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10101010101010101010101 /* AutoSignDisplay/ChannelPresetsView.swift */; };
 		EAAAAAAAAAAAAAAAAAAAAAAA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D99999999999999999999999 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
@@ -47,6 +48,7 @@
 		D66666666666666666666666 /* AutoSignDisplay/SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSignDisplay/SettingsView.swift; sourceTree = "<group>"; };
 		D77777777777777777777777 /* AutoSignDisplay/OnChangeOld.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSignDisplay/OnChangeOld.swift; sourceTree = "<group>"; };
 		D88888888888888888888888 /* AutoSignDisplay/Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSignDisplay/Logger.swift; sourceTree = "<group>"; };
+		DA11111111111111111111AA /* AutoSignDisplay/ManagedConfigurationWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSignDisplay/ManagedConfigurationWatcher.swift; sourceTree = "<group>"; };
 		D99999999999999999999999 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = AutoSignDisplay/Assets.xcassets; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -118,6 +120,7 @@
 				D66666666666666666666666 /* AutoSignDisplay/SettingsView.swift */,
 				D77777777777777777777777 /* AutoSignDisplay/OnChangeOld.swift */,
 				D88888888888888888888888 /* AutoSignDisplay/Logger.swift */,
+				DA11111111111111111111AA /* AutoSignDisplay/ManagedConfigurationWatcher.swift */,
 				D10101010101010101010101 /* AutoSignDisplay/ChannelPresetsView.swift */,
 				D99999999999999999999999 /* Assets.xcassets */,
 			);
@@ -273,6 +276,7 @@
 				E66666666666666666666666 /* AutoSignDisplay/SettingsView.swift in Sources */,
 				E77777777777777777777777 /* AutoSignDisplay/OnChangeOld.swift in Sources */,
 				E88888888888888888888888 /* AutoSignDisplay/Logger.swift in Sources */,
+				EA11111111111111111111AA /* AutoSignDisplay/ManagedConfigurationWatcher.swift in Sources */,
 				E99999999999999999999990 /* AutoSignDisplay/ChannelPresetsView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

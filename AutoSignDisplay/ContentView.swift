@@ -273,6 +273,7 @@ struct ContentView: View {
             }
             .navigationTitle(viewModel.effectiveDisplayTitle)
             .onAppear {
+                viewModel.startWatchingManagedConfiguration()
                 viewModel.startStreamIfNeeded()
                 scheduleAutoPlayPresentation()
             }
@@ -284,6 +285,8 @@ struct ContentView: View {
             .onChangeOld(of: scenePhase) { _, newPhase in
                 switch newPhase {
                 case .active:
+                    // A payload can land while suspended, when no notification arrives.
+                    viewModel.checkManagedConfigurationNow()
                     viewModel.startStreamIfNeeded()
                     scheduleAutoPlayPresentation()
                 case .background:

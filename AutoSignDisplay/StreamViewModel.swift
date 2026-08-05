@@ -116,23 +116,23 @@ class StreamViewModel: ObservableObject {
         ChannelPreset(name: "Announcements", url: "https://orfe.princeton.edu/live/announcements")
     ]
 
-    @Published var streamURL: String
-    @Published var isPlayingOnOpen: Bool
-    @Published var retryTimeout: Double
-    @Published var autoResume: Bool
-    @Published var settingsDisabled: Bool
-    @Published var channelPresets: [ChannelPreset]
-    @Published var channelPresetsManaged: Bool
-    @Published var confirmBeforeDelete: Bool
+    @Published var streamURL: String = ""
+    @Published var isPlayingOnOpen: Bool = false
+    @Published var retryTimeout: Double = 5.0
+    @Published var autoResume: Bool = false
+    @Published var settingsDisabled: Bool = false
+    @Published var channelPresets: [ChannelPreset] = []
+    @Published var channelPresetsManaged: Bool = false
+    @Published var confirmBeforeDelete: Bool = true
     /// Custom main-screen heading. Empty means "use `defaultDisplayTitle`".
-    @Published var displayTitle: String
+    @Published var displayTitle: String = ""
     /// Reduces the main screen to the preset list: no URL entry, no preset
     /// management. Pressing a preset plays it.
-    @Published var viewOnlyMode: Bool
+    @Published var viewOnlyMode: Bool = false
     /// Gates the Settings screen. Empty means no lock.
-    @Published var settingsPIN: String
+    @Published var settingsPIN: String = ""
     /// The PIN came from MDM, so it cannot be changed on the device.
-    @Published var settingsPINManaged: Bool
+    @Published var settingsPINManaged: Bool = false
     @Published var selectedPresetIndex: Int?
     @Published var defaultChannelURL: String?
     @Published var player: AVPlayer?
@@ -142,6 +142,9 @@ class StreamViewModel: ObservableObject {
     /// Whether the app wants playback. The watchdog needs this because AVPlayer's
     /// `.paused` covers both a deliberate pause and a stream it has given up on.
     private var playbackIntended = false
+
+    /// Watches the MDM payload so a change is reconciled without a relaunch.
+    private var configurationWatcher: ManagedConfigurationWatcher?
 
     /// Last state reported to the log, so transitions are recorded and steady state is not.
     private var lastLoggedPlaybackState: String?
@@ -217,8 +220,18 @@ class StreamViewModel: ObservableObject {
     private let logger: Logger
 
     init(logger: Logger = PrintLogger()) {
-        let defaults = UserDefaults.standard
         self.logger = logger
+        loadFromDefaults()
+    }
+
+    /// Reads every persisted setting into the published properties.
+    ///
+    /// Shared by `init()` and `reloadFromDefaults()` rather than written twice. A
+    /// second copy would drift the moment a setting was added, and the reconcile path
+    /// silently failing to pick up a new key is exactly the bug that is hardest to
+    /// notice. Every step here is idempotent, so running it repeatedly converges.
+    private func loadFromDefaults() {
+        let defaults = UserDefaults.standard
 
         // Ensure the managed flag has an explicit default when no MDM payload exists.
         if defaults.object(forKey: ContentView.channelPresetsManagedKey) == nil {
@@ -298,6 +311,27 @@ class StreamViewModel: ObservableObject {
             self.selectedPresetIndex = nil
             defaults.removeObject(forKey: ContentView.selectedPresetIndexKey)
         }
+    }
+
+    /// Re-reads persisted settings after a managed payload has been applied, and
+    /// follows the payload if it named a different channel.
+    ///
+    /// Switching immediately is the point of declarative configuration: an
+    /// administrator changing the channel in Jamf should see the display follow, not
+    /// wait for someone to restart the app. It does stomp on a URL a local user was
+    /// part-way through typing — accepted deliberately, because the payload is the
+    /// desired state and a managed install locks that field anyway.
+    func reloadFromDefaults() {
+        let previousURL = streamURL
+        loadFromDefaults()
+
+        guard streamURL != previousURL else { return }
+        logger.log("Managed configuration changed the stream: \(previousURL.isEmpty ? "(none)" : previousURL) -> \(streamURL)")
+
+        // Only disturb playback that is actually running. Reuses the watchdog's path so
+        // a presented AVPlayerViewController follows the swap.
+        guard player != nil, !playbackStoppedByUser else { return }
+        reloadPlayer(reason: "managed configuration changed")
     }
 
     /// Read presets from defaults. Accepts both the new `[[String: String]]` form
@@ -540,6 +574,29 @@ class StreamViewModel: ObservableObject {
         player?.play()
     }
 
+    /// Begins reconciling to the managed payload while the app runs.
+    ///
+    /// Safe to call repeatedly — the watcher ignores a second start. The reconcile
+    /// itself re-applies the payload and then reloads published state, in that order,
+    /// because applyConfiguration() is what translates managed keys into the app's own.
+    func startWatchingManagedConfiguration() {
+        guard configurationWatcher == nil else { return }
+        let watcher = ManagedConfigurationWatcher(logger: logger) { [weak self] in
+            guard let self else { return }
+            AppConfig.applyConfiguration(logger: self.logger)
+            self.reloadFromDefaults()
+        }
+        configurationWatcher = watcher
+        watcher.start()
+    }
+
+    /// Checks the payload immediately, skipping the debounce. Called when the app
+    /// returns to the foreground, where a change may have landed while it was suspended
+    /// and no notification was delivered.
+    func checkManagedConfigurationNow() {
+        configurationWatcher?.checkNow()
+    }
+
     func startStreamIfNeeded() {
         // Respect an explicit stop: without this, returning to the foreground would
         // resurrect the player the user just dismissed.
@@ -615,6 +672,9 @@ class StreamViewModel: ObservableObject {
     /// One tick of the watchdog. Internal rather than private so a test can drive it
     /// directly instead of waiting on a Timer.
     func evaluatePlaybackHealth() {
+        // Piggyback the configuration check on this tick. See ManagedConfigurationWatcher.poll().
+        configurationWatcher?.poll()
+
         let sinceReload = lastReloadAt.map { Date().timeIntervalSince($0) } ?? .infinity
         let snapshot = samplePlayback()
         // Notice level, but only when something changed. Debug-level os_log is not

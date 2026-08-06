@@ -70,7 +70,7 @@ the neutral defaults.
 | | Private | Public |
 |---|---|---|
 | Bundle identifier | `edu.princeton.autosigndisplay` | `edu.princeton.autostreamdisplay` |
-| App Store Connect Apple ID | `6757710459` | *(fill in from the new record)* |
+| App Store Connect Apple ID | `6757710459` | `6798754784` |
 | Distribution | Custom App — **blocked**, disabled in this ASM | App Store |
 | Status | 1.0 approved, unacquirable | 1.1 pending submission |
 

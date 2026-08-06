@@ -237,6 +237,79 @@ def check_accessibility() -> None:
         fail("accessibility", 'Play Stream is disabled with no hint; VoiceOver says only "dimmed"')
 
 
+# ---------- project configuration ----------
+# Every defect found while setting up the second distribution identity was a project
+# setting, not code: Xcode's target duplication kept the *old* bundle identifier in the
+# new target's Debug configuration, left neither target with a compilation condition, and
+# put the new scheme in xcuserdata where Xcode Cloud cannot see it. A second test target
+# would have caught none of those. These checks catch all three, and run in CI.
+
+APP_IDENTITIES = {
+    "AutoSignDisplay": "edu.princeton.autosigndisplay",
+    "AutoStreamDisplay": "edu.princeton.autostreamdisplay",
+}
+PRIVATE_IDENTITY = "AutoSignDisplay"
+
+
+def build_configurations() -> list[dict]:
+    """Every XCBuildConfiguration as {name, settings}, parsed from project.pbxproj."""
+    text = (REPO_ROOT / "AutoSignDisplay.xcodeproj" / "project.pbxproj").read_text()
+    out = []
+    for match in re.finditer(r'isa = XCBuildConfiguration;(.*?)name = (\w+);', text, re.S):
+        block, name = match.group(1), match.group(2)
+        settings = dict(re.findall(r'^\t+([A-Z_a-z]+) = ([^;]+);', block, re.M))
+        out.append({"config": name, "settings": settings})
+    return out
+
+
+def check_project() -> None:
+    configs = build_configurations()
+
+    # Group the app-target configurations by display name, which is what distinguishes
+    # the two identities in the project file.
+    by_identity: dict[str, list[dict]] = {}
+    for entry in configs:
+        display = entry["settings"].get("INFOPLIST_KEY_CFBundleDisplayName")
+        if display in APP_IDENTITIES:
+            by_identity.setdefault(display, []).append(entry)
+
+    for identity, expected_bundle in APP_IDENTITIES.items():
+        found = by_identity.get(identity, [])
+        if len(found) != 2:
+            fail("project", f"expected Debug and Release configurations for {identity}, "
+                            f"found {len(found)}")
+            continue
+
+        for entry in found:
+            actual = entry["settings"].get("PRODUCT_BUNDLE_IDENTIFIER")
+            if actual != expected_bundle:
+                fail("project",
+                     f"{identity} {entry['config']} has bundle identifier {actual!r}, "
+                     f"expected {expected_bundle!r}. Xcode's target editor applies this to "
+                     f"the selected configuration only, so a duplicated target can keep the "
+                     f"original identifier in Debug — and the two apps would then replace "
+                     f"each other on a device instead of installing side by side.")
+
+            conditions = entry["settings"].get("SWIFT_ACTIVE_COMPILATION_CONDITIONS", "")
+            has_private = "PRIVATE_DISTRIBUTION" in conditions
+            should = identity == PRIVATE_IDENTITY
+            if has_private != should:
+                fail("project",
+                     f"{identity} {entry['config']} "
+                     f"{'is missing' if should else 'must not define'} PRIVATE_DISTRIBUTION. "
+                     f"That flag selects which default channel list is compiled in, so the "
+                     f"wrong value ships one identity's channels inside the other.")
+
+    # Xcode Cloud cannot build a scheme that is not shared, and target duplication leaves
+    # the new one in xcuserdata. The failure looks like a workflow finding nothing to do.
+    shared = REPO_ROOT / "AutoSignDisplay.xcodeproj" / "xcshareddata" / "xcschemes"
+    for identity in APP_IDENTITIES:
+        if not (shared / f"{identity}.xcscheme").is_file():
+            fail("project", f"{identity}.xcscheme is not shared. Xcode Cloud cannot see a "
+                            f"scheme outside xcshareddata, so this identity cannot be built "
+                            f"by CI at all.")
+
+
 # ---------- icon asset catalog ----------
 # Build 3 of 1.0 was rejected on upload with ITMS-90709 for a missing 2x background
 # layer. Xcode builds and the simulator renders fine without it; nothing surfaces
@@ -316,6 +389,7 @@ def check_icons() -> None:
 def main() -> int:
     for name, check in (("presentation", check_presentation),
                         ("accessibility", check_accessibility),
+                        ("project", check_project),
                         ("icons", check_icons)):
         try:
             check()

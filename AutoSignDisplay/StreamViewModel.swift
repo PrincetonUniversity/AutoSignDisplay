@@ -109,23 +109,46 @@ class StreamViewModel: ObservableObject {
     /// empty-means-default rather than seeding this string, so a future rename of
     /// the app carries through for anyone who never customized it.
     static let defaultDisplayTitle = "AutoSignDisplay"
+    /// Princeton's own channels. Shipped by the private **AutoSignDisplay** build,
+    /// which is distributed as a Custom App to one organisation and therefore has no
+    /// reason to be generic.
+    static let princetonPresets: [ChannelPreset] = [
+        ChannelPreset(name: "News", url: "https://orfe.princeton.edu/live/news"),
+        ChannelPreset(name: "News Plus", url: "https://orfe.princeton.edu/live/news-plus"),
+        ChannelPreset(name: "Scenic", url: "https://orfe.princeton.edu/live/scenic"),
+        ChannelPreset(name: "Announcements", url: "https://orfe.princeton.edu/live/announcements")
+    ]
+
+    /// One neutral sample. Shipped by the public **AutoStreamDisplay** build.
+    ///
+    /// A publicly distributed app whose built-in channels are one department's feeds
+    /// presents as an internal tool, which is what App Review steers toward Custom App
+    /// distribution — the door that closed when Custom Apps turned out to be disabled in
+    /// this organisation's ASM. Not empty either: a reviewer opening an app with nothing
+    /// to press has nothing to evaluate.
+    static let neutralPresets: [ChannelPreset] = [
+        ChannelPreset(name: "Featured Event Stream",
+                      url: "https://cdnapisec.kaltura.com/p/1449362/sp/144936200/playManifest/"
+                         + "entryId/1_z9af9mxz/format/applehttp/protocol/https/manifest.m3u8")
+    ]
+
     /// Seeded on first launch when nothing is stored.
     ///
-    /// One neutral sample rather than a named channel list. This app is distributed
-    /// publicly, and an installation whose built-in channels are one department's feeds
-    /// presents as an internal tool rather than the general-purpose signage player it is
-    /// — which is the kind of thing App Review reasonably pushes toward Custom App
-    /// distribution instead.
+    /// Selected at compile time so the two distribution identities share every line of
+    /// source and differ only in which list they carry. Both lists stay compiled into
+    /// both builds, which is what lets the tests assert the contents of each regardless
+    /// of which target they were built for — otherwise whichever variant the test target
+    /// does not link would go unverified.
     ///
-    /// It is not empty for a related reason: a reviewer opening an app with nothing to
-    /// press has nothing to evaluate. One working stream makes the app demonstrable
-    /// without implying it is for anyone in particular.
-    ///
-    /// Real deployments replace this entirely — `ChannelPresets` in the managed payload
+    /// Real deployments replace this entirely: `ChannelPresets` in the managed payload
     /// overrides it and locks the list.
-    static let defaultPresets: [ChannelPreset] = [
-        ChannelPreset(name: "Featured Event Stream", url: "https://cdnapisec.kaltura.com/p/1449362/sp/144936200/playManifest/entryId/1_z9af9mxz/format/applehttp/protocol/https/manifest.m3u8")
-    ]
+    static let defaultPresets: [ChannelPreset] = {
+        #if PRIVATE_DISTRIBUTION
+        return princetonPresets
+        #else
+        return neutralPresets
+        #endif
+    }()
 
     @Published var streamURL: String = ""
     @Published var isPlayingOnOpen: Bool = false

@@ -161,6 +161,36 @@ struct AutoSignDisplayTests {
                 "Intent must survive reappearance. Logged: \(logger.messages)")
     }
 
+    // MARK: - Distribution identities
+
+    /// Both preset lists are compiled into both builds so each can be verified here.
+    /// Whichever variant the test target does not link would otherwise ship unverified.
+    @Test func thePrivateBuildCarriesPrincetonsChannels() {
+        let urls = StreamViewModel.princetonPresets.map(\.url)
+        #expect(StreamViewModel.princetonPresets.count == 4)
+        #expect(urls.allSatisfy { $0.hasPrefix("https://orfe.princeton.edu/live/") })
+        #expect(StreamViewModel.princetonPresets.map(\.name)
+                == ["News", "News Plus", "Scenic", "Announcements"])
+    }
+
+    @Test func thePublicBuildCarriesNothingOrganisationSpecific() {
+        // The point of the neutral list: a reviewer must not see one department's feeds.
+        #expect(StreamViewModel.neutralPresets.count == 1)
+        #expect(StreamViewModel.neutralPresets.first?.name == "Featured Event Stream")
+        #expect(StreamViewModel.neutralPresets.allSatisfy { !$0.url.contains("orfe.princeton.edu") })
+        // Non-empty is deliberate — an app with nothing to press cannot be evaluated.
+        #expect(StreamViewModel.neutralPresets.first?.url.isEmpty == false)
+    }
+
+    @Test func theCompiledDefaultMatchesThisTargetsIdentity() {
+        // Guards the compile-time selection itself, in whichever target runs the tests.
+        #if PRIVATE_DISTRIBUTION
+        #expect(StreamViewModel.defaultPresets == StreamViewModel.princetonPresets)
+        #else
+        #expect(StreamViewModel.defaultPresets == StreamViewModel.neutralPresets)
+        #endif
+    }
+
     // MARK: - Declarative managed configuration
 
     @Test func reloadFromDefaultsPicksUpEveryManagedSetting() async throws {

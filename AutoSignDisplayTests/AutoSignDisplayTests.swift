@@ -163,6 +163,32 @@ struct AutoSignDisplayTests {
 
     // MARK: - Distribution identities
 
+    /// Which app is hosting these tests, read from the bundle.
+    ///
+    /// Deliberately not `#if PRIVATE_DISTRIBUTION`. A test target does not inherit the
+    /// app target's SWIFT_ACTIVE_COMPILATION_CONDITIONS, so a compile-time check in this
+    /// file describes the *test bundle* and says nothing about the app under test.
+    /// Defining the flag on the test target too would make such a check pass while
+    /// verifying the flag rather than the app — which is worse than failing.
+    private var hostIdentity: String { StreamViewModel.defaultDisplayTitle }
+
+    @Test func theDefaultHeadingComesFromTheBundleNotALiteral() {
+        // Also confirms Bundle.main is the host app, not the test runner.
+        #expect(["AutoSignDisplay", "AutoStreamDisplay"].contains(hostIdentity),
+                "Unexpected host identity: \(hostIdentity)")
+    }
+
+    @Test func theHeadingFallsBackThroughTheBundleKeys() {
+        // The test bundle has no CFBundleDisplayName, so this exercises the CFBundleName
+        // leg of the chain rather than the first hit.
+        let testBundle = Bundle(for: BundleMarker.self)
+        #expect(testBundle.object(forInfoDictionaryKey: "CFBundleDisplayName") == nil)
+        #expect(!StreamViewModel.defaultDisplayTitle(in: testBundle).isEmpty)
+    }
+
+    private final class BundleMarker {}
+
+
     /// Both preset lists are compiled into both builds so each can be verified here.
     /// Whichever variant the test target does not link would otherwise ship unverified.
     @Test func thePrivateBuildCarriesPrincetonsChannels() {
@@ -182,13 +208,16 @@ struct AutoSignDisplayTests {
         #expect(StreamViewModel.neutralPresets.first?.url.isEmpty == false)
     }
 
-    @Test func theCompiledDefaultMatchesThisTargetsIdentity() {
-        // Guards the compile-time selection itself, in whichever target runs the tests.
-        #if PRIVATE_DISTRIBUTION
-        #expect(StreamViewModel.defaultPresets == StreamViewModel.princetonPresets)
-        #else
-        #expect(StreamViewModel.defaultPresets == StreamViewModel.neutralPresets)
-        #endif
+    @Test func theCompiledDefaultMatchesTheHostAppsIdentity() {
+        // Asks the app which identity it is, rather than this file's compilation flags.
+        switch hostIdentity {
+        case "AutoSignDisplay":
+            #expect(StreamViewModel.defaultPresets == StreamViewModel.princetonPresets)
+        case "AutoStreamDisplay":
+            #expect(StreamViewModel.defaultPresets == StreamViewModel.neutralPresets)
+        default:
+            Issue.record("Unexpected host identity: \(hostIdentity)")
+        }
     }
 
     // MARK: - Declarative managed configuration

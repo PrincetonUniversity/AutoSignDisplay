@@ -105,10 +105,28 @@ struct PlaybackSnapshot: Equatable {
 class StreamViewModel: ObservableObject {
     static let maxChannelPresets = 20
 
-    /// Shown at the top of the main screen when no custom title is set. Stored as
-    /// empty-means-default rather than seeding this string, so a future rename of
-    /// the app carries through for anyone who never customized it.
-    static let defaultDisplayTitle = "AutoSignDisplay"
+    /// Shown at the top of the main screen when no custom title is set.
+    ///
+    /// Read from the bundle rather than written as a literal, for two reasons. The two
+    /// distribution identities need to show their own names — a public AutoStreamDisplay
+    /// build heading itself "AutoSignDisplay" would be plainly wrong. And a hardcoded
+    /// name is exactly what survives a rename unnoticed, which this project has already
+    /// been through once.
+    ///
+    /// Still stored as empty-means-default rather than seeding the string into
+    /// UserDefaults, so a rename carries through for anyone who never set a custom title.
+    static func defaultDisplayTitle(in bundle: Bundle) -> String {
+        for key in ["CFBundleDisplayName", "CFBundleName"] {
+            if let value = bundle.object(forInfoDictionaryKey: key) as? String,
+               !value.trimmingCharacters(in: .whitespaces).isEmpty {
+                return value
+            }
+        }
+        // Only reachable for a bundle carrying neither key, which a built app always has.
+        return "AutoSignDisplay"
+    }
+
+    static var defaultDisplayTitle: String { defaultDisplayTitle(in: .main) }
     /// Princeton's own channels. Shipped by the private **AutoSignDisplay** build,
     /// which is distributed as a Custom App to one organisation and therefore has no
     /// reason to be generic.

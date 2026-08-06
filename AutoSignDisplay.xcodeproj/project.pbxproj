@@ -7,6 +7,16 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		338FF13C3024E56D00272606 /* AutoSignDisplay/AutoSignDisplayApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D22222222222222222222222 /* AutoSignDisplay/AutoSignDisplayApp.swift */; };
+		338FF13D3024E56D00272606 /* AutoSignDisplay/ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33333333333333333333333 /* AutoSignDisplay/ContentView.swift */; };
+		338FF13E3024E56D00272606 /* AutoSignDisplay/StreamViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D44444444444444444444444 /* AutoSignDisplay/StreamViewModel.swift */; };
+		338FF13F3024E56D00272606 /* AutoSignDisplay/AppConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = D55555555555555555555555 /* AutoSignDisplay/AppConfig.swift */; };
+		338FF1403024E56D00272606 /* AutoSignDisplay/SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D66666666666666666666666 /* AutoSignDisplay/SettingsView.swift */; };
+		338FF1413024E56D00272606 /* AutoSignDisplay/OnChangeOld.swift in Sources */ = {isa = PBXBuildFile; fileRef = D77777777777777777777777 /* AutoSignDisplay/OnChangeOld.swift */; };
+		338FF1423024E56D00272606 /* AutoSignDisplay/Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = D88888888888888888888888 /* AutoSignDisplay/Logger.swift */; };
+		338FF1433024E56D00272606 /* AutoSignDisplay/ManagedConfigurationWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA11111111111111111111AA /* AutoSignDisplay/ManagedConfigurationWatcher.swift */; };
+		338FF1443024E56D00272606 /* AutoSignDisplay/ChannelPresetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10101010101010101010101 /* AutoSignDisplay/ChannelPresetsView.swift */; };
+		338FF1473024E56D00272606 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D99999999999999999999999 /* Assets.xcassets */; };
 		E22222222222222222222222 /* AutoSignDisplay/AutoSignDisplayApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = D22222222222222222222222 /* AutoSignDisplay/AutoSignDisplayApp.swift */; };
 		E33333333333333333333333 /* AutoSignDisplay/ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D33333333333333333333333 /* AutoSignDisplay/ContentView.swift */; };
 		E44444444444444444444444 /* AutoSignDisplay/StreamViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = D44444444444444444444444 /* AutoSignDisplay/StreamViewModel.swift */; };
@@ -14,8 +24,8 @@
 		E66666666666666666666666 /* AutoSignDisplay/SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D66666666666666666666666 /* AutoSignDisplay/SettingsView.swift */; };
 		E77777777777777777777777 /* AutoSignDisplay/OnChangeOld.swift in Sources */ = {isa = PBXBuildFile; fileRef = D77777777777777777777777 /* AutoSignDisplay/OnChangeOld.swift */; };
 		E88888888888888888888888 /* AutoSignDisplay/Logger.swift in Sources */ = {isa = PBXBuildFile; fileRef = D88888888888888888888888 /* AutoSignDisplay/Logger.swift */; };
-		EA11111111111111111111AA /* AutoSignDisplay/ManagedConfigurationWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA11111111111111111111AA /* AutoSignDisplay/ManagedConfigurationWatcher.swift */; };
 		E99999999999999999999990 /* AutoSignDisplay/ChannelPresetsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D10101010101010101010101 /* AutoSignDisplay/ChannelPresetsView.swift */; };
+		EA11111111111111111111AA /* AutoSignDisplay/ManagedConfigurationWatcher.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA11111111111111111111AA /* AutoSignDisplay/ManagedConfigurationWatcher.swift */; };
 		EAAAAAAAAAAAAAAAAAAAAAAA /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = D99999999999999999999999 /* Assets.xcassets */; };
 /* End PBXBuildFile section */
 
@@ -37,6 +47,7 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		338FF14B3024E56D00272606 /* AutoStreamDisplay.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AutoStreamDisplay.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C06C3A9B2DB526FB00506064 /* AutoSignDisplay.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = AutoSignDisplay.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		C06C3AA82DB526FC00506064 /* AutoSignDisplayTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AutoSignDisplayTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C06C3AB22DB526FC00506064 /* AutoSignDisplayUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = AutoSignDisplayUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -48,8 +59,8 @@
 		D66666666666666666666666 /* AutoSignDisplay/SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSignDisplay/SettingsView.swift; sourceTree = "<group>"; };
 		D77777777777777777777777 /* AutoSignDisplay/OnChangeOld.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSignDisplay/OnChangeOld.swift; sourceTree = "<group>"; };
 		D88888888888888888888888 /* AutoSignDisplay/Logger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSignDisplay/Logger.swift; sourceTree = "<group>"; };
-		DA11111111111111111111AA /* AutoSignDisplay/ManagedConfigurationWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSignDisplay/ManagedConfigurationWatcher.swift; sourceTree = "<group>"; };
 		D99999999999999999999999 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; name = Assets.xcassets; path = AutoSignDisplay/Assets.xcassets; sourceTree = "<group>"; };
+		DA11111111111111111111AA /* AutoSignDisplay/ManagedConfigurationWatcher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoSignDisplay/ManagedConfigurationWatcher.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -66,6 +77,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		338FF1453024E56D00272606 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		C06C3A982DB526FB00506064 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -106,6 +124,7 @@
 				C06C3A9B2DB526FB00506064 /* AutoSignDisplay.app */,
 				C06C3AA82DB526FC00506064 /* AutoSignDisplayTests.xctest */,
 				C06C3AB22DB526FC00506064 /* AutoSignDisplayUITests.xctest */,
+				338FF14B3024E56D00272606 /* AutoStreamDisplay.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -130,6 +149,25 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		338FF13A3024E56D00272606 /* AutoStreamDisplay */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 338FF1483024E56D00272606 /* Build configuration list for PBXNativeTarget "AutoStreamDisplay" */;
+			buildPhases = (
+				338FF13B3024E56D00272606 /* Sources */,
+				338FF1453024E56D00272606 /* Frameworks */,
+				338FF1463024E56D00272606 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = AutoStreamDisplay;
+			packageProductDependencies = (
+			);
+			productName = AutoSignDisplay;
+			productReference = 338FF14B3024E56D00272606 /* AutoStreamDisplay.app */;
+			productType = "com.apple.product-type.application";
+		};
 		C06C3A9A2DB526FB00506064 /* AutoSignDisplay */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = C06C3ABC2DB526FC00506064 /* Build configuration list for PBXNativeTarget "AutoSignDisplay" */;
@@ -235,11 +273,20 @@
 				C06C3A9A2DB526FB00506064 /* AutoSignDisplay */,
 				C06C3AA72DB526FC00506064 /* AutoSignDisplayTests */,
 				C06C3AB12DB526FC00506064 /* AutoSignDisplayUITests */,
+				338FF13A3024E56D00272606 /* AutoStreamDisplay */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		338FF1463024E56D00272606 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				338FF1473024E56D00272606 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		C06C3A992DB526FB00506064 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -265,6 +312,22 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		338FF13B3024E56D00272606 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				338FF13C3024E56D00272606 /* AutoSignDisplay/AutoSignDisplayApp.swift in Sources */,
+				338FF13D3024E56D00272606 /* AutoSignDisplay/ContentView.swift in Sources */,
+				338FF13E3024E56D00272606 /* AutoSignDisplay/StreamViewModel.swift in Sources */,
+				338FF13F3024E56D00272606 /* AutoSignDisplay/AppConfig.swift in Sources */,
+				338FF1403024E56D00272606 /* AutoSignDisplay/SettingsView.swift in Sources */,
+				338FF1413024E56D00272606 /* AutoSignDisplay/OnChangeOld.swift in Sources */,
+				338FF1423024E56D00272606 /* AutoSignDisplay/Logger.swift in Sources */,
+				338FF1433024E56D00272606 /* AutoSignDisplay/ManagedConfigurationWatcher.swift in Sources */,
+				338FF1443024E56D00272606 /* AutoSignDisplay/ChannelPresetsView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		C06C3A972DB526FB00506064 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -311,6 +374,62 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		338FF1493024E56D00272606 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Y3TW367T4G;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = AutoStreamDisplay;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = edu.princeton.autostreamdisplay;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+			};
+			name = Debug;
+		};
+		338FF14A3024E56D00272606 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = "App Icon & Top Shelf Image";
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = Y3TW367T4G;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = AutoStreamDisplay;
+				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UIUserInterfaceStyle = Automatic;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.1;
+				PRODUCT_BUNDLE_IDENTIFIER = edu.princeton.autostreamdisplay;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 3;
+			};
+			name = Release;
+		};
 		C06C3ABA2DB526FC00506064 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -441,6 +560,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = AutoSignDisplay;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = PRIVATE_DISTRIBUTION;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -469,6 +589,7 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = AutoSignDisplay;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = PRIVATE_DISTRIBUTION;
 				INFOPLIST_KEY_ITSAppUsesNonExemptEncryption = NO;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.video";
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -557,6 +678,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		338FF1483024E56D00272606 /* Build configuration list for PBXNativeTarget "AutoStreamDisplay" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				338FF1493024E56D00272606 /* Debug */,
+				338FF14A3024E56D00272606 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		C06C3A962DB526FB00506064 /* Build configuration list for PBXProject "AutoSignDisplay" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

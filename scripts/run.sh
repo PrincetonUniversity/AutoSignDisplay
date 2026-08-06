@@ -12,6 +12,7 @@ set -euo pipefail
 #   ./scripts/run.sh --no-open            # don't bring Simulator.app forward
 #   ./scripts/run.sh --dry-run            # print what would happen
 
+# shellcheck source=scripts/lib/simulator.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/simulator.sh"
 
 UDID=""
@@ -25,6 +26,8 @@ usage() {
   sed -n '4,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
+APP=""
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --udid) UDID="$2"; shift 2 ;;
@@ -32,6 +35,7 @@ while [[ $# -gt 0 ]]; do
     --unmanaged) MANAGED_MODE="unmanaged"; shift ;;
     --release) CONFIGURATION="Release"; shift ;;
     --debug) CONFIGURATION="Debug"; shift ;;
+    --app)     APP="${2:?--app needs a scheme name}"; shift 2 ;;
     --clean) CLEAN_DATA=1; shift ;;
     --no-open) OPEN_SIMULATOR=0; shift ;;
     --dry-run) DRY_RUN=1; shift ;;
@@ -39,6 +43,8 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown arg: $1" >&2; usage >&2; exit 2 ;;
   esac
 done
+
+select_app "$APP"
 
 UDID="$(resolve_udid "$UDID")"
 BUILD_DIR="$REPO_ROOT/build/$CONFIGURATION-appletvsimulator"

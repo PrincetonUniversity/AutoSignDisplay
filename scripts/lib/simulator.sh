@@ -8,13 +8,65 @@
 # regardless of the directory the script was invoked from.
 
 PROJECT_NAME="AutoSignDisplay"
-SCHEME_NAME="AutoSignDisplay"
-BUNDLE_ID="edu.princeton.autosigndisplay"
+
+# Two targets share this source: the private AutoSignDisplay and the public
+# AutoStreamDisplay. Callers choose with --app; the default keeps existing invocations
+# behaving as they always have.
+DEFAULT_SCHEME="AutoSignDisplay"
+SCHEME_NAME="$DEFAULT_SCHEME"
+# Resolved by select_app from the project. Deliberately empty until then — see
+# require_app, which fails loudly rather than letting an empty id reach simctl.
+BUNDLE_ID=""
 
 # shellcheck disable=SC2034
 LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$LIB_DIR/../.." && pwd)"
-cd "$REPO_ROOT"
+cd "$REPO_ROOT" || exit 1
+
+# Scheme names the project actually offers, so a typo can name the alternatives.
+available_schemes() {
+  xcodebuild -project "$REPO_ROOT/$PROJECT_NAME.xcodeproj" -list 2>/dev/null \
+    | awk '/Schemes:/{found=1; next} found && NF {print $1}'
+}
+
+# Reads the bundle identifier out of the project rather than repeating it here.
+#
+# A second copy would drift the moment a target's identifier changed, and the two
+# identities now install side by side — so a stale value would not fail, it would
+# quietly drive the *other* app. Costs one xcodebuild invocation.
+bundle_id_for_scheme() {
+  xcodebuild -project "$REPO_ROOT/$PROJECT_NAME.xcodeproj" -scheme "$1" \
+    -configuration Debug -showBuildSettings 2>/dev/null \
+    | awk -F' = ' '/^[[:space:]]+PRODUCT_BUNDLE_IDENTIFIER = /{print $2; exit}'
+}
+
+# Chooses which of the two apps the calling script operates on.
+select_app() {
+  local requested="${1:-$DEFAULT_SCHEME}"
+
+  if ! available_schemes | grep -qx "$requested"; then
+    echo "error: no scheme named '$requested'." >&2
+    echo "       Available schemes:" >&2
+    available_schemes | sed 's/^/         /' >&2
+    exit 3
+  fi
+
+  SCHEME_NAME="$requested"
+  BUNDLE_ID="$(bundle_id_for_scheme "$requested")"
+  if [[ -z "$BUNDLE_ID" ]]; then
+    echo "error: could not read PRODUCT_BUNDLE_IDENTIFIER for scheme '$requested'." >&2
+    exit 3
+  fi
+  echo "[sim] app=$SCHEME_NAME bundle=$BUNDLE_ID"
+}
+
+# Guards the functions below, which are meaningless without an identity.
+require_app() {
+  if [[ -z "$BUNDLE_ID" ]]; then
+    echo "error: select_app must be called before using BUNDLE_ID." >&2
+    exit 3
+  fi
+}
 
 # Prints an available tvOS simulator UDID, preferring one that is already booted.
 # Empty output means none was found.
@@ -90,6 +142,7 @@ ensure_booted() {
 # Writes or clears the managed app configuration for the app on a device.
 #   apply_managed_state <udid> <managed|unmanaged> [dry_run]
 apply_managed_state() {
+  require_app
   local udid="$1" mode="$2" dry_run="${3:-0}"
 
   if [[ "$mode" != "managed" ]]; then

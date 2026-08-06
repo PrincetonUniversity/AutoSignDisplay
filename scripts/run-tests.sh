@@ -5,14 +5,18 @@ set -euo pipefail
 # Usage (runnable from any directory):
 #   ./scripts/run-tests.sh [--udid <UDID>] [--dry-run] [--managed | --unmanaged]
 
+# shellcheck source=scripts/lib/simulator.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/simulator.sh"
 
 DRY_RUN=0
 UDID=""
 MANAGED_MODE="unmanaged"
 
+APP=""
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --app)     APP="${2:?--app needs a scheme name}"; shift 2 ;;
     --dry-run) DRY_RUN=1; shift ;;
     --udid) UDID="$2"; shift 2 ;;
     --managed) MANAGED_MODE="managed"; shift ;;
@@ -21,6 +25,8 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown arg: $1" >&2; echo "Usage: $0 [--udid <UDID>] [--dry-run] [--managed | --unmanaged]"; exit 2 ;;
   esac
 done
+
+select_app "$APP"
 
 echo "[run-tests] dry-run=${DRY_RUN} udid=${UDID:-<auto>}"
 

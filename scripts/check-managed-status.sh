@@ -8,16 +8,22 @@ set -euo pipefail
 #
 # Without --udid, targets a booted tvOS simulator if there is one.
 
+# shellcheck source=scripts/lib/simulator.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/simulator.sh"
 
 UDID=""
+APP=""
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --app)     APP="${2:?--app needs a scheme name}"; shift 2 ;;
     --udid) UDID="$2"; shift 2 ;;
     -h|--help) sed -n '4,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; exit 2 ;;
   esac
 done
+
+select_app "$APP"
 
 UDID="$(resolve_udid "$UDID")"
 

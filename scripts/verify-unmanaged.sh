@@ -10,18 +10,24 @@ set -euo pipefail
 #
 #   --fix   clear the state instead of only reporting it
 
+# shellcheck source=scripts/lib/simulator.sh
 source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/lib/simulator.sh"
 
 UDID=""
 FIX=0
+APP=""
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    --app)     APP="${2:?--app needs a scheme name}"; shift 2 ;;
     --udid) UDID="$2"; shift 2 ;;
     --fix) FIX=1; shift ;;
     -h|--help) sed -n '4,12p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
     *) echo "Unknown arg: $1" >&2; exit 2 ;;
   esac
 done
+
+select_app "$APP"
 
 UDID="$(resolve_udid "$UDID")"
 echo "[verify] device: $UDID ($(device_state "$UDID"))"
